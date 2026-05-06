@@ -13,9 +13,13 @@
     <div>
         <h5 class="mb-0">{{ student.full_name }}</h5>
         <small class="text-muted">
-            {{ student.get_pathway_display }} · Phase {{ student.phase }}
+            {% if student.class_group %}
+                {{ student.class_group.name }}
+                {% if student.class_group.pathway_label %}· {{ student.class_group.pathway_label }}{% endif %}
+            {% else %}
+                <span class="text-warning">Unassigned</span>
+            {% endif %}
             {% if student.year_group %}· Year {{ student.year_group }}{% endif %}
-            {% if student.class_group %}· {{ student.class_group.name }}{% endif %}
         </small>
     </div>
     <a href="{% url 'students:progress' student.pk %}" class="btn btn-outline-primary btn-sm me-1">

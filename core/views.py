@@ -11,6 +11,9 @@ from .decorators import slt_required
 from .widgets import WIDGET_MAP, WIDGET_REGISTRY, SIZE_ORDER, get_user_layout, DEFAULT_LAYOUT, get_role_group, get_role_default_layout, CATEGORY_COLOURS
 from django.utils import timezone
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # ── Setup hub ──────────────────────────────────────────────────────
@@ -24,6 +27,13 @@ def setup_hub(request):
             "icon": "bi-calendar3",
             "desc": "Manage academic years and terms.",
             "url": "core:academic_year_setup",
+            "colour": "primary",
+        },
+        {
+            "title": "Classes & Pathways",
+            "icon": "bi-diagram-3",
+            "desc": "Assign each class to a pathway (Explorers, Horizons, Futures, Preparations) and phase.",
+            "url": "core:classes_manage",
             "colour": "primary",
         },
         {
@@ -49,6 +59,61 @@ def setup_hub(request):
         },
     ]
     return render(request, "core/setup_hub.html", {"sections": sections})
+
+
+@slt_required
+def classes_manage(request):
+    """SLT page to set the pathway + phase for each class.
+
+    Students inherit pathway/phase from their class on save.
+    """
+    from students.models import Student, PATHWAY_CHOICES, PHASE_CHOICES
+
+    classes = ClassGroup.objects.all().order_by("name")
+
+    if request.method == "POST":
+        updated = 0
+        for cg in classes:
+            pw = request.POST.get(f"pathway_{cg.pk}", "").strip()
+            ph_raw = request.POST.get(f"phase_{cg.pk}", "").strip()
+            ph = int(ph_raw) if ph_raw.isdigit() else None
+
+            valid_pw = {code for code, _ in PATHWAY_CHOICES}
+            if pw and pw not in valid_pw:
+                pw = ""
+            # Phase only meaningful for Preparations
+            if pw != "PREP":
+                ph = None
+
+            changed = False
+            if cg.pathway != pw:
+                cg.pathway = pw
+                changed = True
+            if cg.phase != ph:
+                cg.phase = ph
+                changed = True
+            if changed:
+                cg.save(update_fields=["pathway", "phase"])
+                # Re-save students so their pathway/phase mirrors the class
+                for s in cg.students.all():
+                    s.save(update_fields=["pathway", "phase"])
+                updated += 1
+
+        messages.success(request, f"Updated {updated} class(es).")
+        return redirect("core:classes_manage")
+
+    rows = []
+    for cg in classes:
+        rows.append({
+            "cg": cg,
+            "student_count": cg.students.count(),
+        })
+
+    return render(request, "core/classes_manage.html", {
+        "rows": rows,
+        "pathway_choices": PATHWAY_CHOICES,
+        "phase_choices": PHASE_CHOICES,
+    })
 
 
 @login_required

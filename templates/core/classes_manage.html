@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Classes &amp; Pathways — AssessApp{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'core:setup_hub' %}">Setup</a></li>
+        <li class="breadcrumb-item active">Classes &amp; Pathways</li>
+    </ol>
+</nav>
+
+<h3 class="mb-1"><i class="bi bi-diagram-3 me-2"></i>Classes &amp; Pathways</h3>
+<p class="text-muted">
+    Assign each class to one of the four West Gate pathways. Students inherit
+    their pathway (and phase, for Preparations) from their class.
+</p>
+
+{% if messages %}
+    {% for m in messages %}
+        <div class="alert alert-{{ m.tags|default:'info' }} py-2">{{ m }}</div>
+    {% endfor %}
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Class</th>
+                    <th>Students</th>
+                    <th style="min-width:180px;">Pathway</th>
+                    <th style="min-width:140px;">Phase <small class="text-muted">(Preparations only)</small></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rows %}
+                <tr>
+                    <td><strong>{{ r.cg.name }}</strong></td>
+                    <td>{{ r.student_count }}</td>
+                    <td>
+                        <select class="form-select form-select-sm pathway-select" name="pathway_{{ r.cg.pk }}" data-class="{{ r.cg.pk }}">
+                            <option value="">— Unassigned —</option>
+                            {% for code, label in pathway_choices %}
+                                <option value="{{ code }}" {% if r.cg.pathway == code %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select class="form-select form-select-sm phase-select" name="phase_{{ r.cg.pk }}" data-class="{{ r.cg.pk }}"
+                                {% if r.cg.pathway != 'PREP' %}disabled{% endif %}>
+                            <option value="">—</option>
+                            {% for n, label in phase_choices %}
+                                <option value="{{ n }}" {% if r.cg.phase == n %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="text-muted">No classes yet — import them from Arbor first.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <button type="submit" class="btn btn-primary">
+        <i class="bi bi-save me-1"></i>Save changes
+    </button>
+    <a href="{% url 'core:setup_hub' %}" class="btn btn-link">Cancel</a>
+</form>
+
+<script>
+// Enable/disable phase dropdown based on pathway selection
+document.querySelectorAll('.pathway-select').forEach(function(sel) {
+    sel.addEventListener('change', function() {
+        var classId = sel.getAttribute('data-class');
+        var phaseSel = document.querySelector('.phase-select[data-class="' + classId + '"]');
+        if (!phaseSel) return;
+        if (sel.value === 'PREP') {
+            phaseSel.disabled = false;
+        } else {
+            phaseSel.disabled = true;
+            phaseSel.value = '';
+        }
+    });
+});
+</script>
+{% endblock %}
