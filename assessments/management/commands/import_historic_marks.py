@@ -48,6 +48,7 @@ NAME_ALIASES = {
     "ella autumn davidson": "Ella-Autumn Davinson",
     "lilly cross": "Lilly-Ann Cross",
     "muhammad seedat": "Muhammad Yusuf Seedat",
+    "alojzy wrotnicki": "Alojzy-Rudy Wrotnicki",
 }
 
 
@@ -180,8 +181,12 @@ class Command(BaseCommand):
             key = _normalise(name)
             student = name_index.get(key)
             if student is None:
-                # Try alias map
-                alias_target = NAME_ALIASES.get(key)
+                # Try alias map (normalise alias keys to match)
+                alias_target = None
+                for ak, av in NAME_ALIASES.items():
+                    if _normalise(ak) == key:
+                        alias_target = av
+                        break
                 if alias_target:
                     student = name_index.get(_normalise(alias_target))
                     if student:
