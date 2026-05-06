@@ -37,12 +37,14 @@ CATEGORY_COLOURS = {
 # ── Role group helper ──────────────────────────────────────────────
 
 def get_role_group(user):
-    """Return the role group for a user: 'slt', 'lead', or 'teacher'."""
+    """Return the role group: 'slt', 'pathway_lead', 'lead', or 'teacher'."""
     profile = getattr(user, "staffprofile", None)
     if not profile:
         return "teacher"
     if profile.is_slt:
         return "slt"
+    if getattr(profile, "is_pathway_lead", False):
+        return "pathway_lead"
     if profile.is_subject_lead:
         return "lead"
     return "teacher"
@@ -244,7 +246,66 @@ def _fetch_quick_actions(request, ctx):
 
 
 def _fetch_my_class(request, ctx):
-    return {}
+    """Role-aware student-list widget.
+
+    - teacher / TA / HLTA / subject_lead → their assigned class (or covered class)
+    - pathway_lead                       → all classes in their pathway, grouped
+    - SLT                                → all 4 pathways, grouped (collapsible)
+    """
+    from students.models import ClassGroup, PATHWAY_CHOICES
+
+    user = request.user
+    profile = getattr(user, "staffprofile", None)
+    role_group = get_role_group(user)
+    active_class = ctx.get("active_class")
+
+    pathway_label_map = dict(PATHWAY_CHOICES)
+
+    # If teacher has an assigned/covered class, default to per-class view
+    # even if they're also flagged as SLT/lead.
+    if active_class:
+        return {
+            "view_mode": "class",
+            "pathway_groups": [],
+        }
+
+    # No class — build a pathway-grouped view for leaders / SLT
+    if role_group == "slt":
+        pathways_to_show = [code for code, _ in PATHWAY_CHOICES]
+    elif role_group == "pathway_lead" and profile and profile.lead_pathway:
+        pathways_to_show = [profile.lead_pathway]
+    else:
+        # teacher with no class, lead with no class — leave empty,
+        # template falls back to "no class assigned" message
+        return {"view_mode": "empty", "pathway_groups": []}
+
+    pathway_groups = []
+    for code in pathways_to_show:
+        classes = (
+            ClassGroup.objects.filter(pathway=code)
+            .order_by("phase", "name")
+        )
+        class_rows = []
+        total_students = 0
+        for cg in classes:
+            count = cg.students.filter(is_active=True).count()
+            total_students += count
+            class_rows.append({
+                "cg": cg,
+                "student_count": count,
+            })
+        if class_rows or role_group == "slt":
+            pathway_groups.append({
+                "code": code,
+                "label": pathway_label_map.get(code, code),
+                "classes": class_rows,
+                "total_students": total_students,
+            })
+
+    return {
+        "view_mode": "pathways",
+        "pathway_groups": pathway_groups,
+    }
 
 
 def _fetch_covering(request, ctx):

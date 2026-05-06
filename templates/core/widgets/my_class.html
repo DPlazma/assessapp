@@ -1,11 +1,19 @@
-<!-- My Class - student list -->
+<!-- My Class - role-aware student / pathway view -->
 <div class="d-flex align-items-center justify-content-between mb-2">
     <span>
         {% if active_class %}
-            {{ active_class.name }}
+            <strong>{{ active_class.name }}</strong>
+            {% if active_class.pathway_label %}
+                <small class="text-muted">· {{ active_class.pathway_label }}</small>
+            {% endif %}
             {% if not my_class %}
                 <span class="badge bg-warning text-dark ms-1">Covering</span>
             {% endif %}
+        {% elif widget.extra_context.view_mode == "pathways" %}
+            <strong>
+                {% if role_group == "slt" %}Whole school
+                {% else %}My pathway{% endif %}
+            </strong>
         {% else %}
             No Class Assigned
         {% endif %}
@@ -17,7 +25,8 @@
     {% endif %}
 </div>
 
-{% if students %}
+{% if active_class and students %}
+{# ── Per-class student list (teachers / TAs / cover) ── #}
 <div class="list-group list-group-flush">
     {% for student in students %}
     <div class="list-group-item px-0 py-2">
@@ -32,8 +41,8 @@
                     <strong>{{ student.full_name }}</strong>
                     <br>
                     <small class="text-muted">
-                        {{ student.get_pathway_display }} &middot; Phase {{ student.phase }}
-                        {% if student.year_group %}&middot; Y{{ student.year_group }}{% endif %}
+                        {% if student.year_group %}Year {{ student.year_group }}{% endif %}
+                        {% if student.upn %}{% if student.year_group %} · {% endif %}{{ student.upn }}{% endif %}
                     </small>
                 </div>
             </a>
@@ -50,11 +59,84 @@
     </div>
     {% endfor %}
 </div>
+
 {% elif active_class %}
 <div class="text-center py-4 text-muted">
     <i class="bi bi-people" style="font-size: 2.5rem;"></i>
     <p class="mt-2 mb-0">No active students in this class.</p>
 </div>
+
+{% elif widget.extra_context.view_mode == "pathways" and widget.extra_context.pathway_groups %}
+{# ── Pathway-grouped view (pathway leads / SLT) ── #}
+<div class="accordion accordion-flush" id="pathwayAcc">
+    {% for pg in widget.extra_context.pathway_groups %}
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed py-2" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#pw_{{ pg.code }}"
+                    aria-expanded="false">
+                <span class="me-auto">
+                    <strong>{{ pg.label }}</strong>
+                    <span class="badge bg-light text-dark ms-2">
+                        {{ pg.classes|length }} class{{ pg.classes|length|pluralize:"es" }}
+                    </span>
+                    <span class="badge bg-primary ms-1">
+                        {{ pg.total_students }} student{{ pg.total_students|pluralize }}
+                    </span>
+                </span>
+            </button>
+        </h2>
+        <div id="pw_{{ pg.code }}" class="accordion-collapse collapse"
+             data-bs-parent="#pathwayAcc">
+            <div class="accordion-body p-2">
+                {% if pg.classes %}
+                <div class="list-group list-group-flush">
+                    {% for row in pg.classes %}
+                    <div class="list-group-item px-2 py-2 d-flex align-items-center">
+                        <div class="me-auto">
+                            <strong>{{ row.cg.name }}</strong>
+                            {% if row.cg.phase %}
+                                <small class="text-muted">· Phase {{ row.cg.phase }}</small>
+                            {% endif %}
+                        </div>
+                        <span class="badge bg-light text-dark me-2">{{ row.student_count }}</span>
+                        <button class="btn btn-sm btn-outline-secondary"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#cls_{{ row.cg.pk }}">
+                            <i class="bi bi-chevron-down"></i>
+                        </button>
+                    </div>
+                    <div id="cls_{{ row.cg.pk }}" class="collapse">
+                        <div class="ps-3 py-2">
+                            {% for s in row.cg.students.all %}
+                                {% if s.is_active %}
+                                <a href="{% url 'assessments:student_subjects' s.pk %}"
+                                   class="d-block text-decoration-none text-body py-1">
+                                    <i class="bi bi-person-circle me-2 text-muted"></i>
+                                    {{ s.full_name }}
+                                    {% if s.year_group %}
+                                        <small class="text-muted">· Y{{ s.year_group }}</small>
+                                    {% endif %}
+                                </a>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0 px-2 py-2">
+                    <i class="bi bi-info-circle me-1"></i>No classes assigned to this pathway yet —
+                    use <a href="{% url 'core:classes_manage' %}">Setup → Classes &amp; Pathways</a>.
+                </p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
 {% else %}
 <div class="text-center py-4 text-muted">
     <i class="bi bi-info-circle" style="font-size: 2.5rem;"></i>

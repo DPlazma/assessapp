@@ -167,13 +167,8 @@ def dashboard(request):
         students = active_class.students.filter(is_active=True).order_by(
             "last_name", "first_name"
         )
-
-    # For SLT with no assigned class, provide school-wide student context
-    if role_group == "slt" and not active_class:
-        from students.models import Student
-        students = Student.objects.filter(is_active=True).order_by(
-            "last_name", "first_name"
-        )[:50]  # cap for performance
+    # SLT / pathway leads with no class see the pathway-tile view instead
+    # (rendered by the my_class widget) — no flat student dump needed.
 
     base_context = {
         "my_class": my_class,

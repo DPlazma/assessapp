@@ -11,6 +11,7 @@ class StaffProfile(models.Model):
         ("ta", "Teaching Assistant"),
         ("hlta", "HLTA"),
         ("subject_lead", "Subject Lead"),
+        ("pathway_lead", "Pathway Lead"),
         ("slt", "Senior Leadership Team"),
     ]
 
@@ -20,6 +21,17 @@ class StaffProfile(models.Model):
         related_name="staffprofile",
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="teacher")
+    lead_pathway = models.CharField(
+        max_length=4,
+        blank=True,
+        choices=[
+            ("PREP", "Preparations"),
+            ("EXP", "Explorers"),
+            ("FUT", "Futures"),
+            ("HOR", "Horizons"),
+        ],
+        help_text="For Pathway Leads: which pathway they oversee.",
+    )
 
     class Meta:
         ordering = ["user__last_name", "user__first_name"]
@@ -34,6 +46,10 @@ class StaffProfile(models.Model):
     @property
     def is_subject_lead(self):
         return self.role == "subject_lead"
+
+    @property
+    def is_pathway_lead(self):
+        return self.role == "pathway_lead"
 
 
 class SubjectLead(models.Model):
