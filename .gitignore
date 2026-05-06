@@ -51,3 +51,6 @@ desktop.ini
 
 # Static files (collected)
 staticfiles/
+050526.xlsx
+*.xlsx
+
