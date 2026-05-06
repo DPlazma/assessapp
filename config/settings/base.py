@@ -98,6 +98,10 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Bulk-edit pages (Users, Classes, Subjects) post hundreds of fields.
+# Default is 1000; raise to comfortably handle ~500 users × ~6 fields each.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_URL = "/accounts/login/"
