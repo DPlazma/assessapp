@@ -1,0 +1,27 @@
+<!-- Assessment Gaps -->
+{% with gaps=widget.extra_context.assessment_gaps %}
+{% if gaps %}
+<div class="list-group list-group-flush">
+    {% for student, count in gaps %}
+    <div class="list-group-item px-0 py-2 small d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center">
+            <div class="rounded-circle bg-warning bg-opacity-25 text-warning d-flex align-items-center justify-content-center me-2 flex-shrink-0"
+                 style="width: 30px; height: 30px; font-size: 0.75rem;">
+                {{ student.first_name.0 }}{{ student.last_name.0 }}
+            </div>
+            <span>{{ student.full_name }}</span>
+        </div>
+        <span class="badge {% if count == 0 %}bg-danger{% elif count < 5 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+            {{ count }} rec{{ count|pluralize:"ord,ords" }}
+        </span>
+    </div>
+    {% endfor %}
+</div>
+<div class="small text-muted mt-2">Students with fewest assessments this term.</div>
+{% else %}
+<div class="text-center text-muted py-3">
+    <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+    <p class="small mb-0 mt-2">No data to show.</p>
+</div>
+{% endif %}
+{% endwith %}

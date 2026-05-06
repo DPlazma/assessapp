@@ -1,0 +1,50 @@
+{% extends "pdf/base_pdf.html" %}
+{% block title %}Subject Progress Report{% endblock %}
+
+{% block content %}
+<h1>Subject Progress Report</h1>
+<p class="meta">{{ time_label }} · {{ num_students }} students · Generated {{ today|date:"d-m-Y" }}</p>
+
+{% if subject_data %}
+<table>
+    <thead>
+        <tr>
+            <th>Subject</th>
+            <th class="num">Students</th>
+            <th class="num">Statements</th>
+            <th class="num">NYA</th>
+            <th class="num">Emerging</th>
+            <th class="num">Developing</th>
+            <th class="num">Secure</th>
+            <th class="num">% Secure</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for s in subject_data %}
+        <tr class="avoid-break">
+            <td>{{ s.subject.name }}</td>
+            <td class="num">{{ s.num_students }}</td>
+            <td class="num">{{ s.num_statements }}</td>
+            <td class="num">{{ s.counts.NYA }}</td>
+            <td class="num"><span class="badge badge-EME">{{ s.counts.EME }}</span></td>
+            <td class="num"><span class="badge badge-DEV">{{ s.counts.DEV }}</span></td>
+            <td class="num"><span class="badge badge-SEC">{{ s.counts.SEC }}</span></td>
+            <td class="num" style="font-weight:700;">{{ s.percentages.SEC }}%</td>
+        </tr>
+        <!-- Progress bar row -->
+        <tr class="avoid-break">
+            <td colspan="8" style="padding: 0 3mm 2mm;">
+                <div class="progress-bar">
+                    <div class="seg seg-eme" style="width:{{ s.percentages.EME }}%;"></div>
+                    <div class="seg seg-dev" style="width:{{ s.percentages.DEV }}%;"></div>
+                    <div class="seg seg-sec" style="width:{{ s.percentages.SEC }}%;"></div>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No data to display for the selected filters.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+{% block title %}Import from Arbor — AssessApp{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'core:arbor_settings' %}" class="text-decoration-none">
+        <i class="bi bi-arrow-left me-1"></i>Back to Arbor Settings
+    </a>
+</div>
+
+<h4 class="mb-4"><i class="bi bi-cloud-download me-2"></i>Import from Arbor</h4>
+
+<!-- ── Wizard Steps ──────────────────────────────────────── -->
+<div class="d-flex justify-content-center mb-4">
+    <div class="d-flex align-items-center gap-2">
+        <span class="badge rounded-pill {% if step == 1 %}bg-primary{% else %}bg-secondary{% endif %} px-3 py-2">
+            <i class="bi bi-calendar3 me-1"></i>1. Academic Year
+        </span>
+        <i class="bi bi-chevron-right text-muted"></i>
+        <span class="badge rounded-pill {% if step == 2 %}bg-primary{% else %}bg-secondary{% endif %} px-3 py-2">
+            <i class="bi bi-search me-1"></i>2. Review &amp; Import
+        </span>
+    </div>
+</div>
+
+{% if step == 1 %}
+<!-- ══════════════════════════════════════════════════════════
+     STEP 1 — Choose Academic Year
+     ══════════════════════════════════════════════════════════ -->
+<div class="card">
+    <div class="card-header fw-semibold">
+        <i class="bi bi-calendar3 me-2"></i>Select Academic Year
+    </div>
+    <div class="card-body">
+        <p class="text-muted mb-3">
+            Choose which academic year to import classes from.
+            Only registration forms (classes) from the selected year will be imported.
+        </p>
+
+        {% if arbor_years %}
+        <div class="row g-3">
+            {% for y in arbor_years %}
+            <div class="col-md-4 col-lg-3">
+                <a href="?year={{ y.id }}" class="text-decoration-none">
+                    <div class="card h-100 border-primary-subtle hover-shadow">
+                        <div class="card-body text-center py-4">
+                            <div class="fs-5 fw-bold text-primary mb-1">{{ y.displayName }}</div>
+                            <div class="small text-muted">
+                                {% if y.startDate and y.endDate %}
+                                    {{ y.startDate }} — {{ y.endDate }}
+                                {% endif %}
+                            </div>
+                            {% if y.local_match %}
+                                <span class="badge bg-success mt-2">
+                                    <i class="bi bi-check-circle me-1"></i>Already in AssessApp
+                                </span>
+                                {% if y.local_match.is_current %}
+                                    <span class="badge bg-primary mt-1">Current</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="badge bg-outline-secondary border mt-2 text-muted">
+                                    Will be created
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-warning mb-0">
+            <i class="bi bi-exclamation-triangle me-1"></i>
+            No academic years found in Arbor.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% elif step == 2 %}
+<!-- ══════════════════════════════════════════════════════════
+     STEP 2 — Review & Import
+     ══════════════════════════════════════════════════════════ -->
+
+<div class="alert alert-info py-2 d-flex align-items-center mb-4">
+    <i class="bi bi-calendar-check me-2 fs-5"></i>
+    <div>
+        <strong>{{ selected_year.displayName }}</strong>
+        {% if ay_created %}
+            <span class="badge bg-success ms-2">Academic year created in AssessApp</span>
+        {% else %}
+            <span class="badge bg-secondary ms-2">Academic year already exists</span>
+        {% endif %}
+        <a href="{% url 'core:arbor_import_preview' %}" class="ms-3 small">
+            <i class="bi bi-arrow-left me-1"></i>Change year
+        </a>
+    </div>
+</div>
+
+<!-- ── Summary Cards ─────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card text-center border-primary">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold text-primary">{{ counts.classes_create }}</div>
+                <div class="small text-muted">Classes to create</div>
+                <div class="small text-muted">{{ counts.classes_skip }} already exist</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-success">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold text-success">{{ counts.students_create }}</div>
+                <div class="small text-muted">Students to create</div>
+                <div class="small text-muted">{{ counts.students_update }} to update, {{ counts.students_skip }} unchanged</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-info">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold text-info">{{ counts.staff_create }}</div>
+                <div class="small text-muted">Staff to create</div>
+                <div class="small text-muted">{{ counts.staff_skip }} already exist</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-warning">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold text-warning">{{ counts.assignments }}</div>
+                <div class="small text-muted">Teacher assignments</div>
+                <div class="small text-muted">+ TAs discovered on import</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Import Options ────────────────────────────────────── -->
+<div class="card mb-4">
+    <div class="card-body">
+        <h6 class="mb-3"><i class="bi bi-sliders me-1"></i>Choose what to import</h6>
+        <div class="row g-3">
+            <div class="col-auto">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="chk-classes" checked>
+                    <label class="form-check-label" for="chk-classes">
+                        Classes <span class="badge bg-primary">{{ counts.classes_create }} new</span>
+                    </label>
+                </div>
+            </div>
+            <div class="col-auto">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="chk-students" checked>
+                    <label class="form-check-label" for="chk-students">
+                        Students <span class="badge bg-success">{{ counts.students_create }} new, {{ counts.students_update }} update</span>
+                    </label>
+                </div>
+            </div>
+            <div class="col-auto">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="chk-staff" checked>
+                    <label class="form-check-label" for="chk-staff">
+                        Staff <span class="badge bg-info">{{ counts.staff_create }} new</span>
+                    </label>
+                </div>
+            </div>
+            <div class="col-auto">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="chk-assignments" checked>
+                    <label class="form-check-label" for="chk-assignments">
+                        Class Assignments <span class="badge bg-warning text-dark">{{ counts.assignments }}</span>
+                    </label>
+                </div>
+            </div>
+            <div class="col-auto">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="chk-ta" checked>
+                    <label class="form-check-label" for="chk-ta">
+                        TA &amp; HLTA from timetable
+                        <i class="bi bi-info-circle text-muted" data-bs-toggle="tooltip"
+                           title="Scans the Arbor timetable to discover Teaching Assistant and HLTA class assignments. This adds a few minutes to the import."></i>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="mt-3">
+            <button type="button" class="btn btn-success" id="btn-import">
+                <i class="bi bi-cloud-download me-1"></i>Run Import
+            </button>
+        </div>
+        <div id="import-result" class="mt-3" style="display:none;"></div>
+    </div>
+</div>
+
+<!-- ── Class Groups ──────────────────────────────────────── -->
+<div class="card mb-4">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-people me-1"></i>Class Groups ({{ class_preview|length }})</span>
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-classes">
+            <i class="bi bi-chevron-down"></i>
+        </button>
+    </div>
+    <div id="collapse-classes" class="collapse">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr><th>Name</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for c in class_preview %}
+                        <tr>
+                            <td>{{ c.name }}</td>
+                            <td>
+                                {% if c.action == "create" %}
+                                    <span class="badge bg-success">New</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Exists</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Students ──────────────────────────────────────────── -->
+<div class="card mb-4">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-mortarboard me-1"></i>Students ({{ student_preview|length }})</span>
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-students">
+            <i class="bi bi-chevron-down"></i>
+        </button>
+    </div>
+    <div id="collapse-students" class="collapse">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr><th>Name</th><th>UPN</th><th>Class</th><th>Status</th><th>Changes</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for s in student_preview %}
+                        <tr>
+                            <td>{{ s.first_name }} {{ s.last_name }}</td>
+                            <td class="small font-monospace">{{ s.upn|default:"—" }}</td>
+                            <td>{{ s.class_name|default:"—" }}</td>
+                            <td>
+                                {% if s.action == "create" %}
+                                    <span class="badge bg-success">New</span>
+                                {% elif s.action == "update" %}
+                                    <span class="badge bg-warning text-dark">Update</span>
+                                {% elif s.action == "skip_no_upn" %}
+                                    <span class="badge bg-danger">No UPN</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Unchanged</span>
+                                {% endif %}
+                            </td>
+                            <td class="small">
+                                {% for ch in s.changes %}
+                                    <span class="text-muted">{{ ch }}</span>{% if not forloop.last %}<br>{% endif %}
+                                {% endfor %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Staff ─────────────────────────────────────────────── -->
+<div class="card mb-4">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-person-badge me-1"></i>Staff ({{ staff_preview|length }})</span>
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-staff">
+            <i class="bi bi-chevron-down"></i>
+        </button>
+    </div>
+    <div id="collapse-staff" class="collapse">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr><th>Name</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for s in staff_preview %}
+                        <tr>
+                            <td>{{ s.display_name }}</td>
+                            <td>
+                                {% if s.action == "create" %}
+                                    <span class="badge bg-success">New</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Exists</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Class Assignments ─────────────────────────────────── -->
+<div class="card mb-4">
+    <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-link-45deg me-1"></i>Class Assignments ({{ assignment_preview|length }})</span>
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-assignments">
+            <i class="bi bi-chevron-down"></i>
+        </button>
+    </div>
+    <div id="collapse-assignments" class="collapse">
+        <div class="card-body p-0">
+            <div class="alert alert-info m-3 py-2 small">
+                <i class="bi bi-info-circle me-1"></i>
+                The preview shows <strong>teacher</strong> assignments from Arbor's registration forms.
+                During import, <strong>TA and HLTA</strong> assignments will be automatically discovered
+                from the timetable (this adds a few minutes to the import).
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="table-light">
+                        <tr><th>Staff</th><th>Class</th><th>Role</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for a in assignment_preview %}
+                        <tr>
+                            <td>{{ a.staff_name }}</td>
+                            <td>{{ a.class_name }}</td>
+                            <td><span class="badge bg-primary">{{ a.role }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if step == 2 %}
+<script>
+document.getElementById('btn-import')?.addEventListener('click', function() {
+    var btn = this;
+    var result = document.getElementById('import-result');
+
+    var payload = {
+        classes: document.getElementById('chk-classes').checked,
+        students: document.getElementById('chk-students').checked,
+        staff: document.getElementById('chk-staff').checked,
+        assignments: document.getElementById('chk-assignments').checked,
+        ta_assignments: document.getElementById('chk-ta').checked,
+        year_id: '{{ selected_year.id }}',
+    };
+
+    var isTa = payload.ta_assignments && payload.assignments;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' +
+        (isTa ? 'Importing &amp; discovering TAs…' : 'Importing…');
+    result.style.display = isTa ? 'block' : 'none';
+    if (isTa) {
+        result.className = 'mt-3 alert alert-info py-2';
+        result.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Scanning Arbor timetable for TA assignments — this may take a few minutes…';
+    }
+
+    fetch('{% url "core:arbor_import_run" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}',
+        },
+        body: JSON.stringify(payload),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        result.style.display = 'block';
+        if (data.ok) {
+            result.className = 'mt-3 alert alert-success py-2';
+            result.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>' + data.msg +
+                ' <a href="" class="alert-link">Refresh to see updated preview</a>.';
+        } else {
+            result.className = 'mt-3 alert alert-danger py-2';
+            result.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>' + data.msg;
+        }
+    })
+    .catch(function(err) {
+        result.style.display = 'block';
+        result.className = 'mt-3 alert alert-danger py-2';
+        result.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>Network error: ' + err;
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Run Import';
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}EHCP Documents — {{ student.full_name }}{% endblock %}
+
+{% block content %}
+{% include "students/_student_nav.html" with student_nav="ehcp" %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h5 class="mb-0"><i class="bi bi-file-earmark-pdf text-danger me-2"></i>EHCP Documents</h5>
+    <div>
+        <a href="{% url 'evidence:ehcp_document_upload' student.pk %}" class="btn btn-primary btn-sm">
+            <i class="bi bi-upload me-1"></i>Upload PDF
+        </a>
+    </div>
+</div>
+
+{% if docs %}
+<div class="row g-3">
+    {% for doc in docs %}
+    <div class="col-md-6 col-lg-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-start justify-content-between">
+                    <div>
+                        <h6 class="card-title mb-1">
+                            <i class="bi bi-file-earmark-pdf text-danger me-1"></i>
+                            <a href="{% url 'evidence:ehcp_document_view' doc.pk %}" class="text-decoration-none">
+                                {{ doc.title|truncatechars:50 }}
+                            </a>
+                        </h6>
+                        <small class="text-muted d-block">{{ doc.original_filename|truncatechars:40 }}</small>
+                    </div>
+                    <span class="badge
+                        {% if doc.processing_status == 'COMPLETED' %}bg-success
+                        {% elif doc.processing_status == 'PROCESSING' %}bg-info
+                        {% elif doc.processing_status == 'FAILED' %}bg-danger
+                        {% else %}bg-secondary
+                        {% endif %}">
+                        {{ doc.get_processing_status_display }}
+                    </span>
+                </div>
+
+                <div class="mt-2 small text-muted">
+                    <i class="bi bi-calendar me-1"></i>{{ doc.created_at|date:"d-m-Y" }}
+                    {% if doc.page_count %}
+                    &middot; {{ doc.page_count }} page{{ doc.page_count|pluralize }}
+                    {% endif %}
+                    {% if doc.uploaded_by %}
+                    &middot; {{ doc.uploaded_by.get_full_name|default:doc.uploaded_by.username }}
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-footer bg-white border-top-0 d-flex gap-1">
+                <a href="{% url 'evidence:ehcp_document_view' doc.pk %}" class="btn btn-outline-primary btn-sm flex-fill">
+                    <i class="bi bi-eye me-1"></i>View / Edit
+                </a>
+                {% if doc.processing_status == 'COMPLETED' %}
+                <a href="{% url 'evidence:ehcp_document_extract' doc.pk %}" class="btn btn-outline-success btn-sm">
+                    <i class="bi bi-robot"></i>
+                </a>
+                {% endif %}
+                <form method="post" action="{% url 'evidence:ehcp_document_delete' doc.pk %}"
+                      onsubmit="return confirm('Delete this document?');" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger btn-sm">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+    <i class="bi bi-file-earmark-pdf" style="font-size: 3rem;"></i>
+    <p class="mt-2">No EHCP documents uploaded yet.</p>
+    <a href="{% url 'evidence:ehcp_document_upload' student.pk %}" class="btn btn-primary">
+        <i class="bi bi-upload me-1"></i>Upload First Document
+    </a>
+</div>
+{% endif %}
+{% endblock %}

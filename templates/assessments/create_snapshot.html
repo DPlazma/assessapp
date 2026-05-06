@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Create Snapshot — AssessApp{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item active">Create Snapshot</li>
+    </ol>
+</nav>
+
+<h5 class="mb-3">Create Termly Snapshot</h5>
+
+<div class="card">
+    <div class="card-body">
+        <p>This will capture the current assessment status for <strong>all active students</strong> across all assessment areas.</p>
+        <p>Snapshots are stored against the current term and can be used to compare progress across terms.</p>
+
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-1"></i>
+            Existing snapshot data for the current term will be <strong>updated</strong> (not duplicated).
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary btn-lg"
+                    onclick="return confirm('Create a snapshot of all current assessments? This may take a moment.')">
+                <i class="bi bi-camera me-1"></i>Create Snapshot Now
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}AssessApp Report{% endblock %}</title>
+    <style>
+        @page {
+            size: A4{% block page_orientation %}{% endblock %};
+            margin: 15mm;
+            @bottom-center {
+                content: "West Gate School — AssessApp";
+                font-size: 8pt;
+                color: #999;
+            }
+            @bottom-right {
+                content: "Page " counter(page) " of " counter(pages);
+                font-size: 8pt;
+                color: #999;
+            }
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: "Liberation Sans", Arial, Helvetica, sans-serif;
+            font-size: 10pt;
+            color: #212529;
+            line-height: 1.4;
+            margin: 0;
+            padding: 0;
+        }
+        h1 { font-size: 18pt; margin: 0 0 4mm; color: #0d6efd; }
+        h2 { font-size: 14pt; margin: 8mm 0 3mm; color: #333; border-bottom: 1px solid #dee2e6; padding-bottom: 2mm; }
+        h3 { font-size: 11pt; margin: 5mm 0 2mm; color: #555; }
+        .meta { font-size: 9pt; color: #6c757d; margin-bottom: 5mm; }
+
+        table { width: 100%; border-collapse: collapse; margin-bottom: 4mm; }
+        th, td { padding: 2mm 3mm; border: 0.5pt solid #dee2e6; text-align: left; font-size: 9pt; }
+        th { background-color: #f8f9fa; font-weight: 600; }
+        td.num { text-align: center; }
+
+        .badge {
+            display: inline-block;
+            padding: 1mm 3mm;
+            border-radius: 2mm;
+            font-size: 8pt;
+            font-weight: 600;
+            color: white;
+        }
+        .badge-SEC { background-color: #198754; }
+        .badge-DEV { background-color: #fd7e14; }
+        .badge-EME { background-color: #dc3545; }
+        .badge-NYA { background-color: #6c757d; }
+
+        .progress-bar {
+            height: 5mm;
+            border-radius: 2mm;
+            overflow: hidden;
+            background-color: #e9ecef;
+            display: flex;
+            margin-bottom: 2mm;
+        }
+        .progress-bar .seg { height: 100%; }
+        .seg-sec { background-color: #198754; }
+        .seg-dev { background-color: #fd7e14; }
+        .seg-eme { background-color: #dc3545; }
+
+        .header-card {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 3mm;
+            padding: 4mm 6mm;
+            margin-bottom: 5mm;
+        }
+        .header-card .name { font-size: 16pt; font-weight: 700; margin: 0; }
+        .header-card .details { font-size: 9pt; color: #6c757d; margin-top: 1mm; }
+
+        .grid-container { page-break-inside: auto; }
+        .avoid-break { page-break-inside: avoid; }
+
+        .summary-grid {
+            display: flex;
+            gap: 4mm;
+            margin-bottom: 4mm;
+        }
+        .summary-box {
+            flex: 1;
+            text-align: center;
+            border: 1px solid #dee2e6;
+            border-radius: 2mm;
+            padding: 3mm;
+        }
+        .summary-box .num { font-size: 16pt; font-weight: 700; }
+        .summary-box .label { font-size: 8pt; color: #6c757d; }
+
+        {% block extra_css %}{% endblock %}
+    </style>
+</head>
+<body>
+{% block content %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}{% if target %}Edit Target{% else %}New Target{% endif %} — {{ student.full_name }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <h4 class="mb-3">
+            <i class="bi bi-bullseye text-primary me-2"></i>
+            {% if target %}Edit EHCP Target{% else %}New EHCP Target{% endif %}
+        </h4>
+        <p class="text-muted">{{ student.full_name }}</p>
+
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="mb-3">
+                <label for="title" class="form-label">Target Title <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="title" name="title"
+                       value="{{ target.title|default:'' }}" required
+                       placeholder="e.g. Use two-word phrases to communicate needs">
+            </div>
+
+            <div class="mb-3">
+                <label for="description" class="form-label">Description</label>
+                <textarea class="form-control" id="description" name="description"
+                          rows="3" placeholder="Additional detail about this target...">{{ target.description|default:'' }}</textarea>
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <label for="outcome" class="form-label">EHCP Outcome Area</label>
+                    <select class="form-select" id="outcome" name="outcome">
+                        <option value="">— None —</option>
+                        {% for o in outcomes %}
+                        <option value="{{ o.pk }}" {% if target.outcome_id == o.pk %}selected{% endif %}>
+                            {{ o.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% if target %}
+                <div class="col-md-6">
+                    <label for="status" class="form-label">Status</label>
+                    <select class="form-select" id="status" name="status">
+                        {% for code, label in target.STATUS_CHOICES %}
+                        <option value="{{ code }}" {% if target.status == code %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label for="set_date" class="form-label">Date Set <span class="text-danger">*</span></label>
+                    <input type="date" class="form-control" id="set_date" name="set_date"
+                           value="{{ target.set_date|date:'Y-m-d'|default:today }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="review_date" class="form-label">Review Date</label>
+                    <input type="date" class="form-control" id="review_date" name="review_date"
+                           value="{{ target.review_date|date:'Y-m-d'|default:'' }}">
+                </div>
+                {% if target %}
+                <div class="col-md-4">
+                    <label for="met_date" class="form-label">Date Met</label>
+                    <input type="date" class="form-control" id="met_date" name="met_date"
+                           value="{{ target.met_date|date:'Y-m-d'|default:'' }}">
+                </div>
+                {% endif %}
+            </div>
+
+            {% if areas %}
+            <div class="mb-3">
+                <label class="form-label">Link to Assessment Areas</label>
+                <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                    {% for area in areas %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="linked_areas"
+                               value="{{ area.pk }}" id="area_{{ area.pk }}"
+                               {% if area.pk in selected_areas %}checked{% endif %}>
+                        <label class="form-check-label small" for="area_{{ area.pk }}">
+                            {{ area.subject.name }} — {{ area.name }}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                <small class="text-muted">Optional: link curriculum areas that support this target</small>
+            </div>
+            {% endif %}
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>{% if target %}Save Changes{% else %}Create Target{% endif %}
+                </button>
+                <a href="{% url 'evidence:ehcp_overview' student.pk %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

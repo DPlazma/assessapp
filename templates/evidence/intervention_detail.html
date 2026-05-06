@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% block title %}{{ enrolment.program.name }} — {{ student.full_name }}{% endblock %}
+
+{% block content %}
+{% include "students/_student_nav.html" with student_nav="interventions" %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h5 class="mb-0">
+        <i class="bi bi-clipboard2-pulse text-primary me-2"></i>{{ enrolment.program.name }}
+    </h5>
+    <div class="d-flex gap-2 align-items-center">
+        {# Status update #}
+        <form method="post" class="d-inline">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update_status">
+            <select name="status" class="form-select form-select-sm d-inline-block" style="width:auto"
+                    onchange="this.form.submit()">
+                {% for val, label in status_choices %}
+                <option value="{{ val }}" {% if val == enrolment.status %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </form>
+        {# Delete #}
+        <form method="post" action="{% url 'evidence:intervention_delete' enrolment.pk %}"
+              onsubmit="return confirm('Delete this intervention enrolment? This cannot be undone.');">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-outline-danger" title="Delete enrolment">
+                <i class="bi bi-trash"></i>
+            </button>
+        </form>
+    </div>
+</div>
+
+{# ── Summary Card ── #}
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-sm-6 col-lg-3">
+                <strong class="text-muted d-block" style="font-size:.8rem;">Category</strong>
+                {{ enrolment.program.get_category_display }}
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <strong class="text-muted d-block" style="font-size:.8rem;">Delivered By</strong>
+                {{ enrolment.delivered_by.get_full_name|default:"—" }}
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <strong class="text-muted d-block" style="font-size:.8rem;">Frequency</strong>
+                {{ enrolment.frequency|default:"—" }}
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <strong class="text-muted d-block" style="font-size:.8rem;">Duration</strong>
+                {% if enrolment.duration_mins %}{{ enrolment.duration_mins }} mins{% else %}—{% endif %}
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <strong class="text-muted d-block" style="font-size:.8rem;">Start</strong>
+                {{ enrolment.start_date|date:"d-m-Y" }}
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <strong class="text-muted d-block" style="font-size:.8rem;">End</strong>
+                {{ enrolment.end_date|date:"d-m-Y"|default:"Ongoing" }}
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <strong class="text-muted d-block" style="font-size:.8rem;">Sessions</strong>
+                {{ enrolment.session_count }} ({{ enrolment.attendance_pct }}% attended)
+            </div>
+            {% if enrolment.ehcp_target %}
+            <div class="col-sm-6 col-lg-3">
+                <strong class="text-muted d-block" style="font-size:.8rem;">EHCP Target</strong>
+                <a href="{% url 'evidence:target_detail' enrolment.ehcp_target.pk %}">
+                    {{ enrolment.ehcp_target.title|truncatechars:40 }}
+                </a>
+            </div>
+            {% endif %}
+        </div>
+        {% if enrolment.goals %}
+        <hr class="my-2">
+        <strong class="text-muted d-block" style="font-size:.8rem;">Goals</strong>
+        <p class="mb-0">{{ enrolment.goals }}</p>
+        {% endif %}
+        {% if enrolment.notes %}
+        <hr class="my-2">
+        <strong class="text-muted d-block" style="font-size:.8rem;">Notes</strong>
+        <p class="mb-0">{{ enrolment.notes }}</p>
+        {% endif %}
+    </div>
+</div>
+
+{# ── Log Session ── #}
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center"
+         data-bs-toggle="collapse" data-bs-target="#logSession" role="button">
+        <h6 class="mb-0"><i class="bi bi-journal-plus me-1"></i>Log Session</h6>
+        <i class="bi bi-chevron-down"></i>
+    </div>
+    <div id="logSession" class="collapse">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="log_session">
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-4">
+                        <label for="session_date" class="form-label">Date</label>
+                        <input type="date" name="session_date" id="session_date"
+                               class="form-control" value="{{ today }}">
+                    </div>
+                    <div class="col-sm-4">
+                        <label for="duration_mins" class="form-label">Duration (mins)</label>
+                        <input type="number" name="duration_mins" id="duration_mins"
+                               class="form-control" min="1"
+                               value="{{ enrolment.duration_mins|default:'' }}">
+                    </div>
+                    <div class="col-sm-4 d-flex align-items-end">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="attended"
+                                   value="true" id="attended" checked>
+                            <label class="form-check-label" for="attended">Attended</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="session_notes" class="form-label">Notes</label>
+                    <textarea name="session_notes" id="session_notes" class="form-control"
+                              rows="2" placeholder="Session observations..."></textarea>
+                </div>
+                <button class="btn btn-sm btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>Log Session
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# ── Add Review ── #}
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center"
+         data-bs-toggle="collapse" data-bs-target="#addReview" role="button">
+        <h6 class="mb-0"><i class="bi bi-star me-1"></i>Add Review</h6>
+        <i class="bi bi-chevron-down"></i>
+    </div>
+    <div id="addReview" class="collapse">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_review">
+                <div class="row g-3 mb-3">
+                    <div class="col-sm-4">
+                        <label for="review_date" class="form-label">Review Date</label>
+                        <input type="date" name="review_date" id="review_date"
+                               class="form-control" value="{{ today }}">
+                    </div>
+                    <div class="col-sm-4">
+                        <label for="impact" class="form-label">Impact</label>
+                        <select name="impact" id="impact" class="form-select">
+                            {% for val, label in impact_choices %}
+                            <option value="{{ val }}">{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-sm-4 d-flex align-items-end">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox"
+                                   name="continue_intervention" value="true"
+                                   id="continue_intervention" checked>
+                            <label class="form-check-label" for="continue_intervention">
+                                Continue intervention
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="progress_notes" class="form-label">Progress Notes</label>
+                    <textarea name="progress_notes" id="progress_notes" class="form-control"
+                              rows="2" placeholder="Progress observed..."></textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="next_steps" class="form-label">Next Steps</label>
+                    <textarea name="next_steps" id="next_steps" class="form-control"
+                              rows="2" placeholder="Recommended actions..."></textarea>
+                </div>
+                <button class="btn btn-sm btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>Save Review
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# ── Session History ── #}
+<div class="card mb-3">
+    <div class="card-header bg-white">
+        <h6 class="mb-0"><i class="bi bi-list-check me-1"></i>Session History</h6>
+    </div>
+    {% if sessions %}
+    <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Date</th>
+                    <th>Attended</th>
+                    <th>Duration</th>
+                    <th>Notes</th>
+                    <th>Recorded By</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in sessions %}
+                <tr>
+                    <td>{{ s.session_date|date:"d-m-Y" }}</td>
+                    <td>
+                        {% if s.attended %}
+                        <span class="badge bg-success">Yes</span>
+                        {% else %}
+                        <span class="badge bg-danger">No</span>
+                        {% endif %}
+                    </td>
+                    <td>{% if s.duration_mins %}{{ s.duration_mins }} min{% else %}—{% endif %}</td>
+                    <td>{{ s.notes|truncatechars:80|default:"—" }}</td>
+                    <td>{{ s.recorded_by.get_full_name|default:s.recorded_by.username }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body text-center text-muted py-4">
+        No sessions recorded yet.
+    </div>
+    {% endif %}
+</div>
+
+{# ── Reviews ── #}
+<div class="card mb-3">
+    <div class="card-header bg-white">
+        <h6 class="mb-0"><i class="bi bi-star me-1"></i>Reviews</h6>
+    </div>
+    {% if reviews %}
+    <div class="card-body p-2">
+        {% for r in reviews %}
+        <div class="border rounded p-3 mb-2">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <strong>{{ r.review_date|date:"d-m-Y" }}</strong>
+                <span class="badge
+                    {% if r.impact == 'SIGNIFICANT' %}bg-success
+                    {% elif r.impact == 'GOOD' %}bg-primary
+                    {% elif r.impact == 'SOME' %}bg-info text-dark
+                    {% elif r.impact == 'LIMITED' %}bg-warning text-dark
+                    {% elif r.impact == 'NONE' %}bg-secondary
+                    {% elif r.impact == 'REGRESSION' %}bg-danger
+                    {% endif %}">{{ r.get_impact_display }}</span>
+            </div>
+            {% if r.progress_notes %}<p class="mb-1"><strong>Progress:</strong> {{ r.progress_notes }}</p>{% endif %}
+            {% if r.next_steps %}<p class="mb-1"><strong>Next steps:</strong> {{ r.next_steps }}</p>{% endif %}
+            <small class="text-muted">
+                {% if r.continue_intervention %}
+                <i class="bi bi-check-circle text-success me-1"></i>Continue
+                {% else %}
+                <i class="bi bi-x-circle text-danger me-1"></i>Discontinue recommended
+                {% endif %}
+                &middot; {{ r.reviewed_by.get_full_name|default:r.reviewed_by.username }}
+            </small>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card-body text-center text-muted py-4">
+        No reviews yet.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,69 @@
+<!-- School Overview - whole-school stat cards -->
+<div class="row g-3">
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card border-0 bg-primary bg-opacity-10 h-100">
+            <div class="card-body text-center py-3">
+                <i class="bi bi-people-fill text-primary" style="font-size: 1.4rem;"></i>
+                <div class="fs-3 fw-bold text-primary mt-1">{{ widget.extra_context.total_students }}</div>
+                <div class="small text-muted">Students</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card border-0 bg-success bg-opacity-10 h-100">
+            <div class="card-body text-center py-3">
+                <i class="bi bi-collection text-success" style="font-size: 1.4rem;"></i>
+                <div class="fs-3 fw-bold text-success mt-1">{{ widget.extra_context.total_classes }}</div>
+                <div class="small text-muted">Classes</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card border-0 bg-warning bg-opacity-10 h-100">
+            <div class="card-body text-center py-3">
+                <i class="bi bi-pencil-square text-warning" style="font-size: 1.4rem;"></i>
+                <div class="fs-3 fw-bold text-warning mt-1">{{ widget.extra_context.assessments_school }}</div>
+                <div class="small text-muted">Assessments</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card border-0 bg-info bg-opacity-10 h-100">
+            <div class="card-body text-center py-3">
+                <i class="bi bi-camera-video text-info" style="font-size: 1.4rem;"></i>
+                <div class="fs-3 fw-bold text-info mt-1">{{ widget.extra_context.evidence_school }}</div>
+                <div class="small text-muted">Evidence</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card border-0 bg-secondary bg-opacity-10 h-100">
+            <div class="card-body text-center py-3">
+                <i class="bi bi-person-badge text-secondary" style="font-size: 1.4rem;"></i>
+                <div class="fs-3 fw-bold text-secondary mt-1">{{ widget.extra_context.active_assessors }}</div>
+                <div class="small text-muted">Active Staff</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+        <div class="card border-0 bg-dark bg-opacity-10 h-100">
+            <div class="card-body text-center py-3">
+                <i class="bi bi-calendar3 text-dark" style="font-size: 1.4rem;"></i>
+                <div class="fw-bold mt-1">
+                    {% if widget.extra_context.current_term %}
+                        {{ widget.extra_context.current_term }}
+                    {% else %}
+                        <span class="text-muted">No term</span>
+                    {% endif %}
+                </div>
+                <div class="small text-muted">Current Term</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="text-end mt-2">
+    <a href="{% url 'assessments:school_progress' %}" class="small text-decoration-none">
+        School Progress <i class="bi bi-arrow-right"></i>
+    </a>
+</div>

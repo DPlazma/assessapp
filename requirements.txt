@@ -1,0 +1,16 @@
+Django>=5.1,<6.0
+psycopg2-binary>=2.9,<3.0
+django-htmx>=1.19,<2.0
+Pillow>=10.0,<11.0
+gunicorn>=22.0,<23.0
+whitenoise>=6.7,<7.0
+django-import-export>=4.0,<5.0
+openpyxl>=3.1,<4.0
+weasyprint>=68.0,<69.0
+opencv-python-headless>=4.9,<5.0
+pillow-heif>=0.18,<1.0
+pytesseract>=0.3,<1.0
+pdf2image>=1.17,<2.0
+reportlab>=4.1,<5.0
+requests>=2.31,<3.0
+django-allauth[socialaccount]>=65.0,<66.0

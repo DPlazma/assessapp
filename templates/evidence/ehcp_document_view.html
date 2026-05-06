@@ -1,0 +1,736 @@
+{% extends "base.html" %}
+{% block title %}{{ doc.title }} — {{ student.full_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf_viewer.min.css">
+<style>
+    /* Page layout */
+    .page-wrapper {
+        position: relative; display: inline-block; margin-bottom: 16px;
+        box-shadow: 0 2px 10px rgba(0,0,0,.18);
+    }
+    .page-wrapper canvas { display: block; }
+
+    /* PDF.js text layer — selectable text over canvas */
+    .page-wrapper .textLayer {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 2; /* above canvas, below annotation-layer */
+    }
+    .page-wrapper .textLayer span {
+        position: absolute; white-space: pre; color: transparent;
+        pointer-events: all;
+    }
+    .page-wrapper .textLayer span::selection { background: rgba(0,100,200,.3); }
+
+    /* Annotation overlay (above text layer) */
+    .annotation-overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 4; pointer-events: none;
+    }
+    .annotation-overlay .ann {
+        position: absolute; box-sizing: border-box; pointer-events: auto; cursor: pointer;
+        transition: filter .15s;
+    }
+    .annotation-overlay .ann:hover { filter: brightness(.92); }
+
+    /* Highlight: semi-transparent filled rect */
+    .ann.ann-highlight { border-radius: 2px; mix-blend-mode: multiply; }
+
+    /* Strikethrough: thin line through the middle */
+    .ann.ann-strikethrough { height: 3px !important; border-radius: 0; }
+
+    /* Text box: bordered box with text */
+    .ann.ann-textbox {
+        border: 2px solid; border-radius: 4px; padding: 4px 6px;
+        font-size: 12px; line-height: 1.3; word-break: break-word;
+        overflow: hidden; background: rgba(255,255,255,.85);
+    }
+
+    /* Sticky note: small pin icon, expands on hover */
+    .ann.ann-note {
+        width: 28px !important; height: 28px !important; border-radius: 4px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 16px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.25);
+        transition: all .2s;
+    }
+    .ann.ann-note .note-icon { pointer-events: none; }
+    .ann.ann-note .note-bubble {
+        display: none; position: absolute; left: 32px; top: -4px;
+        background: #fff; border: 1px solid #ccc; border-radius: 6px;
+        padding: 6px 10px; font-size: 12px; line-height: 1.4;
+        min-width: 140px; max-width: 260px; box-shadow: 0 2px 8px rgba(0,0,0,.18);
+        white-space: pre-wrap; word-break: break-word; color: #333;
+        pointer-events: auto; z-index: 99;
+    }
+    .ann.ann-note:hover .note-bubble,
+    .ann.ann-note:focus .note-bubble { display: block; }
+
+    /* Drawing feedback */
+    .draw-rect {
+        position: absolute; border: 2px dashed rgba(0,0,0,.5);
+        background: rgba(255,235,59,.2); z-index: 10; pointer-events: none;
+    }
+
+    /* Toolbar */
+    .anno-toolbar .btn.active { box-shadow: inset 0 2px 6px rgba(0,0,0,.25); background: #e9ecef; }
+    .color-dot {
+        width: 20px; height: 20px; border-radius: 50%; display: inline-block;
+        cursor: pointer; border: 2.5px solid transparent; transition: border-color .15s;
+    }
+    .color-dot:hover { border-color: #999; }
+    .color-dot.active { border-color: #333; }
+
+    #page-viewer {
+        max-height: 85vh; overflow-y: auto; text-align: center;
+        background: #e0e0e0; padding: 16px; border-radius: 6px;
+    }
+
+    /* Toast notification */
+    .anno-toast {
+        position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+        background: #333; color: #fff; padding: 8px 18px; border-radius: 8px;
+        font-size: 13px; z-index: 9999; opacity: 0; transition: opacity .3s;
+        pointer-events: none;
+    }
+    .anno-toast.show { opacity: 1; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <h4 class="mb-0"><i class="bi bi-file-earmark-text text-primary me-2"></i>{{ doc.title }}</h4>
+        <small class="text-muted">
+            <a href="{% url 'evidence:ehcp_document_list' student.pk %}" class="text-decoration-none">
+                <i class="bi bi-arrow-left me-1"></i>{{ student.full_name }} — EHCP Documents
+            </a>
+        </small>
+    </div>
+    <div class="d-flex gap-1 flex-wrap">
+        {% if doc.processing_status == 'COMPLETED' %}
+        <a href="{% url 'evidence:ehcp_document_export' doc.pk %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-download me-1"></i>Export PDF
+        </a>
+        <a href="{% url 'evidence:ehcp_document_extract' doc.pk %}" class="btn btn-success btn-sm">
+            <i class="bi bi-robot me-1"></i>AI Extract Outcomes
+        </a>
+        {% endif %}
+        {% if doc.processing_status == 'FAILED' %}
+        <a href="{% url 'evidence:ehcp_document_process' doc.pk %}" class="btn btn-warning btn-sm">
+            <i class="bi bi-arrow-clockwise me-1"></i>Retry OCR
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+{% if doc.processing_status == 'PROCESSING' %}
+<div class="alert alert-info"><i class="bi bi-hourglass-split me-1"></i>Text extraction is in progress...</div>
+{% elif doc.processing_status == 'FAILED' %}
+<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-1"></i>Text extraction failed. <a href="{% url 'evidence:ehcp_document_process' doc.pk %}" class="alert-link">Retry</a>.</div>
+{% elif doc.processing_status == 'UPLOADED' %}
+<div class="alert alert-warning"><i class="bi bi-info-circle me-1"></i>Text not extracted yet. <a href="{% url 'evidence:ehcp_document_process' doc.pk %}" class="alert-link">Run text extraction</a>.</div>
+{% endif %}
+
+<!-- Annotation Toolbar -->
+<div class="card mb-3 anno-toolbar">
+    <div class="card-body py-2 d-flex align-items-center gap-3 flex-wrap">
+        <!-- Tools -->
+        <div class="btn-group btn-group-sm" role="group">
+            <button class="btn btn-outline-secondary active" data-tool="select" title="Select text / click annotations">
+                <i class="bi bi-cursor-text me-1"></i><span class="d-none d-md-inline">Select</span>
+            </button>
+            <button class="btn btn-outline-warning" data-tool="highlight" title="Select text then click this to highlight">
+                <i class="bi bi-highlighter me-1"></i><span class="d-none d-md-inline">Highlight</span>
+            </button>
+            <button class="btn btn-outline-danger" data-tool="strikethrough" title="Select text then click this to strikethrough">
+                <i class="bi bi-type-strikethrough me-1"></i><span class="d-none d-md-inline">Strike</span>
+            </button>
+        </div>
+        <div class="vr d-none d-sm-block"></div>
+        <div class="btn-group btn-group-sm" role="group">
+            <button class="btn btn-outline-primary" data-tool="textbox" title="Draw a text box on the page">
+                <i class="bi bi-textarea-t me-1"></i><span class="d-none d-md-inline">Text Box</span>
+            </button>
+            <button class="btn btn-outline-info" data-tool="note" title="Click on the page to place a sticky note">
+                <i class="bi bi-chat-square-text me-1"></i><span class="d-none d-md-inline">Note</span>
+            </button>
+        </div>
+
+        <div class="vr d-none d-sm-block"></div>
+        <!-- Colours -->
+        <div class="d-flex align-items-center gap-1" id="color-picker">
+            <span class="color-dot active" data-color="#ffeb3b" style="background:#ffeb3b" title="Yellow"></span>
+            <span class="color-dot" data-color="#4caf50" style="background:#4caf50" title="Green"></span>
+            <span class="color-dot" data-color="#f48fb1" style="background:#f48fb1" title="Pink"></span>
+            <span class="color-dot" data-color="#64b5f6" style="background:#64b5f6" title="Blue"></span>
+            <span class="color-dot" data-color="#ff8a65" style="background:#ff8a65" title="Orange"></span>
+        </div>
+        <div class="vr d-none d-sm-block"></div>
+        <!-- Zoom -->
+        <div class="btn-group btn-group-sm" role="group">
+            <button class="btn btn-outline-secondary" id="btn-zoom-out" title="Zoom out"><i class="bi bi-zoom-out"></i></button>
+            <button class="btn btn-outline-secondary" id="btn-zoom-reset" title="Reset"><i class="bi bi-arrows-angle-expand"></i></button>
+            <button class="btn btn-outline-secondary" id="btn-zoom-in" title="Zoom in"><i class="bi bi-zoom-in"></i></button>
+        </div>
+        <div class="ms-auto d-flex align-items-center gap-2">
+            <small class="text-muted d-none d-md-inline" id="tool-hint">Select text, then click Highlight or Strike</small>
+            <span class="badge bg-secondary">{{ doc.page_count }} pg</span>
+        </div>
+    </div>
+</div>
+
+<!-- PDF Viewer -->
+<div id="page-viewer"></div>
+<div class="anno-toast" id="toast"></div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script type="module">
+// ── PDF.js setup ──
+const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.mjs');
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.worker.min.mjs';
+
+const CSRF = '{{ csrf_token }}';
+const DOC_PK = {{ doc.pk }};
+const PDF_URL = '{{ doc.file.url }}';
+const API_URL = '{% url "evidence:ehcp_annotations_api" doc.pk %}';
+
+// ── State ──
+let currentTool = 'select';
+let currentColor = '#ffeb3b';
+let zoom = 1.5;
+let allAnnotations = [];
+let pages = []; // {wrapper, canvas, textLayerDiv, annoOverlay, pdfPage, pageNum}
+
+const viewer = document.getElementById('page-viewer');
+const toast = document.getElementById('toast');
+const toolHint = document.getElementById('tool-hint');
+
+function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2000);
+}
+
+// ── Render PDF with text layers ──
+const pdf = await pdfjsLib.getDocument(PDF_URL).promise;
+
+async function renderPage(pdfPage, pageNum) {
+    const vp = pdfPage.getViewport({ scale: zoom });
+
+    // Wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'page-wrapper';
+    wrapper.dataset.page = pageNum;
+    wrapper.style.width = vp.width + 'px';
+    wrapper.style.height = vp.height + 'px';
+
+    // Canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = vp.width;
+    canvas.height = vp.height;
+    const ctx = canvas.getContext('2d');
+    await pdfPage.render({ canvasContext: ctx, viewport: vp }).promise;
+    wrapper.appendChild(canvas);
+
+    // Text layer (selectable text)
+    const textLayerDiv = document.createElement('div');
+    textLayerDiv.className = 'textLayer';
+    textLayerDiv.style.width = vp.width + 'px';
+    textLayerDiv.style.height = vp.height + 'px';
+    wrapper.appendChild(textLayerDiv);
+
+    const textContent = await pdfPage.getTextContent();
+    // Render text spans positioned over the canvas
+    for (const item of textContent.items) {
+        if (!item.str) continue;
+        const tx = pdfjsLib.Util.transform(vp.transform, item.transform);
+        const span = document.createElement('span');
+        span.textContent = item.str;
+        const fh = Math.abs(tx[3]);  // font height in px
+        span.style.left = tx[4] + 'px';
+        span.style.top = (tx[5] - fh) + 'px';
+        span.style.fontSize = fh + 'px';
+        span.style.fontFamily = item.fontName || 'sans-serif';
+        // Approximate width scaling
+        if (item.width && item.str.length > 0) {
+            const scaledW = item.width * vp.scale;
+            span.style.letterSpacing = ((scaledW - span.offsetWidth) / Math.max(1, item.str.length)) + 'px';
+            span.style.width = scaledW + 'px';
+        }
+        textLayerDiv.appendChild(span);
+    }
+
+    // Annotation overlay (above text layer, pointer-events: none by default)
+    const annoOverlay = document.createElement('div');
+    annoOverlay.className = 'annotation-overlay';
+    wrapper.appendChild(annoOverlay);
+
+    // Label
+    const label = document.createElement('div');
+    label.className = 'text-muted small mt-1 mb-2';
+    label.textContent = `Page ${pageNum} of ${pdf.numPages}`;
+
+    viewer.appendChild(wrapper);
+    viewer.appendChild(label);
+
+    return { wrapper, canvas, textLayerDiv, annoOverlay, pdfPage, pageNum,
+             width: vp.width, height: vp.height };
+}
+
+for (let i = 1; i <= pdf.numPages; i++) {
+    const pdfPage = await pdf.getPage(i);
+    pages.push(await renderPage(pdfPage, i));
+}
+
+// ── Re-render on zoom ──
+async function rerender() {
+    for (const pg of pages) {
+        const vp = pg.pdfPage.getViewport({ scale: zoom });
+        pg.wrapper.style.width = vp.width + 'px';
+        pg.wrapper.style.height = vp.height + 'px';
+
+        // Re-render canvas
+        pg.canvas.width = vp.width;
+        pg.canvas.height = vp.height;
+        await pg.pdfPage.render({ canvasContext: pg.canvas.getContext('2d'), viewport: vp }).promise;
+
+        // Re-render text layer
+        pg.textLayerDiv.innerHTML = '';
+        pg.textLayerDiv.style.width = vp.width + 'px';
+        pg.textLayerDiv.style.height = vp.height + 'px';
+        const textContent = await pg.pdfPage.getTextContent();
+        for (const item of textContent.items) {
+            if (!item.str) continue;
+            const tx = pdfjsLib.Util.transform(vp.transform, item.transform);
+            const span = document.createElement('span');
+            span.textContent = item.str;
+            const fh = Math.abs(tx[3]);
+            span.style.left = tx[4] + 'px';
+            span.style.top = (tx[5] - fh) + 'px';
+            span.style.fontSize = fh + 'px';
+            span.style.fontFamily = item.fontName || 'sans-serif';
+            pg.textLayerDiv.appendChild(span);
+        }
+
+        pg.width = vp.width;
+        pg.height = vp.height;
+    }
+    // Reposition annotations
+    allAnnotations.forEach(a => positionEl(a));
+}
+
+// ── Get selection bounds relative to a page-wrapper ──
+function getSelectionBoundsOnPage() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+
+    const range = sel.getRangeAt(0);
+    // Find which page the selection is in
+    let node = range.startContainer;
+    while (node && !node.classList?.contains('page-wrapper')) node = node.parentElement;
+    if (!node) return null;
+    const pageNum = parseInt(node.dataset.page);
+    const pg = pages.find(p => p.pageNum === pageNum);
+    if (!pg) return null;
+
+    // Get all client rects of the selection
+    const rects = Array.from(range.getClientRects());
+    if (!rects.length) return null;
+
+    const wrapperRect = pg.wrapper.getBoundingClientRect();
+    // Convert each rect to page-relative percentages and return them all
+    // (allows multi-line highlight with one annotation per line)
+    const result = [];
+    for (const r of rects) {
+        const x = r.left - wrapperRect.left;
+        const y = r.top - wrapperRect.top;
+        const w = r.width;
+        const h = r.height;
+        if (w < 2 || h < 2) continue;
+        result.push({
+            page: pageNum,
+            x: (x / pg.width) * 100,
+            y: (y / pg.height) * 100,
+            width: (w / pg.width) * 100,
+            height: (h / pg.height) * 100,
+        });
+    }
+    // Merge rects that are on the same line (similar y)
+    const merged = [];
+    for (const r of result) {
+        const last = merged[merged.length - 1];
+        if (last && Math.abs(last.y - r.y) < 0.5 && last.page === r.page) {
+            // Same line — extend
+            const right = Math.max(last.x + last.width, r.x + r.width);
+            last.x = Math.min(last.x, r.x);
+            last.width = right - last.x;
+            last.height = Math.max(last.height, r.height);
+        } else {
+            merged.push({ ...r });
+        }
+    }
+    return merged.length ? merged : null;
+}
+
+// ── Save annotation to server ──
+async function saveAnnotation(data) {
+    const resp = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+}
+
+// ── Create DOM element for an annotation ──
+function createAnnotationEl(a) {
+    const pg = pages.find(p => p.pageNum === a.page);
+    if (!pg) return;
+
+    const el = document.createElement('div');
+    el.className = `ann ann-${a.type}`;
+    el.dataset.id = a.id;
+
+    if (a.type === 'highlight') {
+        el.style.backgroundColor = a.color;
+        el.style.opacity = '0.35';
+    } else if (a.type === 'strikethrough') {
+        el.style.backgroundColor = a.color;
+        el.style.opacity = '0.7';
+    } else if (a.type === 'textbox') {
+        el.style.borderColor = a.color;
+        el.style.color = '#222';
+        el.textContent = a.text;
+    } else if (a.type === 'note') {
+        el.style.backgroundColor = a.color;
+        el.innerHTML = `<span class="note-icon"><i class="bi bi-chat-square-text-fill"></i></span>
+                        <div class="note-bubble">${escHtml(a.text)}</div>`;
+    }
+
+    a.el = el;
+    allAnnotations.push(a);
+    positionEl(a);
+    pg.annoOverlay.appendChild(el);
+
+    // Click handler (for context menu in select mode)
+    el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showContextMenu(a, e);
+    });
+    // Notes: also show bubble on touch
+    if (a.type === 'note') {
+        el.addEventListener('touchstart', (e) => {
+            el.querySelector('.note-bubble').style.display = 'block';
+            setTimeout(() => { el.querySelector('.note-bubble').style.display = ''; }, 3000);
+        }, { passive: true });
+    }
+}
+
+function positionEl(a) {
+    const pg = pages.find(p => p.pageNum === a.page);
+    if (!pg || !a.el) return;
+    if (a.type === 'note') {
+        // Notes are fixed 28x28 — just set left/top
+        a.el.style.left = (a.x / 100 * pg.width) + 'px';
+        a.el.style.top = (a.y / 100 * pg.height) + 'px';
+    } else {
+        a.el.style.left = (a.x / 100 * pg.width) + 'px';
+        a.el.style.top = (a.y / 100 * pg.height) + 'px';
+        a.el.style.width = (a.width / 100 * pg.width) + 'px';
+        a.el.style.height = (a.height / 100 * pg.height) + 'px';
+    }
+}
+
+function escHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+// ── Context menu for annotation management ──
+function showContextMenu(a, e) {
+    document.querySelectorAll('.anno-ctx').forEach(m => m.remove());
+    const menu = document.createElement('div');
+    menu.className = 'anno-ctx dropdown-menu show shadow';
+    menu.style.cssText = `position:fixed; left:${e.clientX}px; top:${e.clientY}px; z-index:9999;`;
+
+    // Edit text (textbox / note)
+    if (a.type === 'textbox' || a.type === 'note') {
+        addMenuItem(menu, 'bi-pencil', 'Edit Text', async () => {
+            menu.remove();
+            const newText = prompt('Edit text:', a.text);
+            if (newText === null) return;
+            await fetch(`/evidence/ehcp-annotation/${a.id}/update/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: newText }),
+            });
+            a.text = newText;
+            if (a.type === 'textbox') a.el.textContent = newText;
+            else a.el.querySelector('.note-bubble').textContent = newText;
+        });
+    }
+
+    // Colour row
+    const colorRow = document.createElement('div');
+    colorRow.className = 'px-3 py-2 d-flex gap-1';
+    ['#ffeb3b','#4caf50','#f48fb1','#64b5f6','#ff8a65'].forEach(c => {
+        const dot = document.createElement('span');
+        dot.className = 'color-dot' + (c === a.color ? ' active' : '');
+        dot.style.background = c;
+        dot.onclick = async () => {
+            await fetch(`/evidence/ehcp-annotation/${a.id}/update/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ color: c }),
+            });
+            a.color = c;
+            updateElColor(a);
+            menu.remove();
+        };
+        colorRow.appendChild(dot);
+    });
+    menu.appendChild(colorRow);
+
+    menu.appendChild(Object.assign(document.createElement('hr'), { className: 'dropdown-divider' }));
+
+    // Delete
+    addMenuItem(menu, 'bi-trash text-danger', 'Delete', async () => {
+        await fetch(`/evidence/ehcp-annotation/${a.id}/delete/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+        });
+        a.el.remove();
+        allAnnotations = allAnnotations.filter(x => x.id !== a.id);
+        menu.remove();
+        showToast('Annotation deleted');
+    }, 'text-danger');
+
+    document.body.appendChild(menu);
+    const closer = (ev) => {
+        if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('pointerdown', closer); }
+    };
+    setTimeout(() => document.addEventListener('pointerdown', closer), 50);
+}
+
+function addMenuItem(menu, icon, label, onclick, cls = '') {
+    const btn = document.createElement('button');
+    btn.className = `dropdown-item ${cls}`;
+    btn.innerHTML = `<i class="bi ${icon} me-2"></i>${label}`;
+    btn.onclick = onclick;
+    menu.appendChild(btn);
+}
+
+function updateElColor(a) {
+    if (a.type === 'highlight' || a.type === 'strikethrough') {
+        a.el.style.backgroundColor = a.color;
+    } else if (a.type === 'textbox') {
+        a.el.style.borderColor = a.color;
+    } else if (a.type === 'note') {
+        a.el.style.backgroundColor = a.color;
+    }
+}
+
+// ── Load existing annotations ──
+async function loadAnnotations() {
+    const resp = await fetch(API_URL);
+    const data = await resp.json();
+    data.forEach(a => createAnnotationEl({
+        id: a.id, type: a.annotation_type, page: a.page,
+        x: a.x, y: a.y, width: a.width, height: a.height,
+        color: a.color, text: a.text,
+    }));
+}
+await loadAnnotations();
+
+// ── Toolbar: tool switching ──
+document.querySelectorAll('[data-tool]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const tool = btn.dataset.tool;
+
+        // Highlight / strikethrough: apply to current text selection immediately
+        if ((tool === 'highlight' || tool === 'strikethrough') && window.getSelection && !window.getSelection().isCollapsed) {
+            const bounds = getSelectionBoundsOnPage();
+            if (bounds && bounds.length) {
+                for (const b of bounds) {
+                    const saved = await saveAnnotation({
+                        type: tool, page: b.page,
+                        x: b.x, y: b.y, width: b.width,
+                        height: tool === 'strikethrough' ? 0.3 : b.height,
+                        color: currentColor, text: '',
+                    });
+                    if (saved) createAnnotationEl({
+                        id: saved.id, type: saved.type, page: saved.page,
+                        x: saved.x, y: saved.y, width: saved.width, height: saved.height,
+                        color: saved.color, text: '',
+                    });
+                }
+                window.getSelection().removeAllRanges();
+                showToast(`${tool === 'highlight' ? 'Highlighted' : 'Strikethrough added'}`);
+                return; // Don't change tool
+            }
+        }
+
+        // Otherwise switch to that tool
+        document.querySelectorAll('[data-tool]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentTool = tool;
+
+        // Adjust text-layer pointer-events: allow text selection in select/highlight/strikethrough
+        const textSelectable = ['select', 'highlight', 'strikethrough'].includes(tool);
+        pages.forEach(pg => {
+            pg.textLayerDiv.style.pointerEvents = textSelectable ? 'auto' : 'none';
+            pg.textLayerDiv.style.zIndex = textSelectable ? '6' : '2';
+            pg.annoOverlay.style.pointerEvents = tool === 'select' ? 'auto' : 'none';
+            pg.wrapper.style.cursor = textSelectable ? 'text' : 'crosshair';
+        });
+
+        // Hint text
+        if (tool === 'select') toolHint.textContent = 'Select text, then click Highlight or Strike';
+        else if (tool === 'highlight') toolHint.textContent = 'Select text, then click Highlight — or select text first';
+        else if (tool === 'strikethrough') toolHint.textContent = 'Select text, then click Strike';
+        else if (tool === 'textbox') toolHint.textContent = 'Draw a rectangle on the page';
+        else if (tool === 'note') toolHint.textContent = 'Click on the page to place a note';
+    });
+});
+
+// ── Colour picker ──
+document.querySelectorAll('.color-dot').forEach(dot => {
+    dot.addEventListener('click', () => {
+        document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active'));
+        dot.classList.add('active');
+        currentColor = dot.dataset.color;
+    });
+});
+
+// ── Zoom ──
+document.getElementById('btn-zoom-in').addEventListener('click', () => { zoom = Math.min(4, zoom + 0.3); rerender(); });
+document.getElementById('btn-zoom-out').addEventListener('click', () => { zoom = Math.max(0.5, zoom - 0.3); rerender(); });
+document.getElementById('btn-zoom-reset').addEventListener('click', () => { zoom = 1.5; rerender(); });
+
+// ── Drawing: textbox and note placement on annotation overlay / wrapper ──
+pages.forEach(pg => {
+    let drawing = false, startX, startY, drawRect;
+
+    // Use wrapper for pointer events when in draw mode
+    pg.wrapper.addEventListener('pointerdown', (e) => {
+        if (currentTool === 'select' || currentTool === 'highlight' || currentTool === 'strikethrough') return;
+        if (e.target.closest('.ann')) return; // clicking existing annotation
+
+        // Note: place immediately on click
+        if (currentTool === 'note') {
+            e.preventDefault();
+            const rect = pg.wrapper.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const text = prompt('Enter note:');
+            if (!text) return;
+            const pctX = (x / pg.width) * 100;
+            const pctY = (y / pg.height) * 100;
+            saveAnnotation({
+                type: 'note', page: pg.pageNum,
+                x: pctX, y: pctY, width: 3, height: 3,
+                color: currentColor, text,
+            }).then(saved => {
+                if (saved) createAnnotationEl({
+                    id: saved.id, type: 'note', page: saved.page,
+                    x: saved.x, y: saved.y, width: saved.width, height: saved.height,
+                    color: saved.color, text: saved.text,
+                });
+                showToast('Note added');
+            });
+            return;
+        }
+
+        // Textbox: drag to draw
+        if (currentTool === 'textbox') {
+            e.preventDefault();
+            const rect = pg.wrapper.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+            drawing = true;
+            drawRect = document.createElement('div');
+            drawRect.className = 'draw-rect';
+            drawRect.style.left = startX + 'px';
+            drawRect.style.top = startY + 'px';
+            pg.wrapper.appendChild(drawRect);
+        }
+    });
+
+    pg.wrapper.addEventListener('pointermove', (e) => {
+        if (!drawing || !drawRect) return;
+        const rect = pg.wrapper.getBoundingClientRect();
+        const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+        drawRect.style.left = Math.min(startX, cx) + 'px';
+        drawRect.style.top = Math.min(startY, cy) + 'px';
+        drawRect.style.width = Math.abs(cx - startX) + 'px';
+        drawRect.style.height = Math.abs(cy - startY) + 'px';
+    });
+
+    pg.wrapper.addEventListener('pointerup', async (e) => {
+        if (!drawing || !drawRect) return;
+        drawing = false;
+        const rect = pg.wrapper.getBoundingClientRect();
+        const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+        let x = Math.min(startX, cx), y = Math.min(startY, cy);
+        let w = Math.abs(cx - startX), h = Math.abs(cy - startY);
+        drawRect.remove(); drawRect = null;
+
+        if (w < 20 || h < 14) { w = 180; h = 50; x = Math.max(0, startX - 90); }
+
+        const text = prompt('Enter text:');
+        if (!text) return;
+
+        const pctX = (x / pg.width) * 100, pctY = (y / pg.height) * 100;
+        const pctW = (w / pg.width) * 100, pctH = (h / pg.height) * 100;
+
+        const saved = await saveAnnotation({
+            type: 'textbox', page: pg.pageNum,
+            x: pctX, y: pctY, width: pctW, height: pctH,
+            color: currentColor, text,
+        });
+        if (saved) {
+            createAnnotationEl({
+                id: saved.id, type: 'textbox', page: saved.page,
+                x: saved.x, y: saved.y, width: saved.width, height: saved.height,
+                color: saved.color, text: saved.text,
+            });
+            showToast('Text box added');
+        }
+    });
+});
+
+// ── Keyboard shortcut: after selecting text, press H to highlight, S to strikethrough ──
+document.addEventListener('keydown', async (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const key = e.key.toLowerCase();
+    if (key !== 'h' && key !== 's') return;
+
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) return;
+
+    const tool = key === 'h' ? 'highlight' : 'strikethrough';
+    const bounds = getSelectionBoundsOnPage();
+    if (!bounds || !bounds.length) return;
+
+    for (const b of bounds) {
+        const saved = await saveAnnotation({
+            type: tool, page: b.page,
+            x: b.x, y: b.y, width: b.width,
+            height: tool === 'strikethrough' ? 0.3 : b.height,
+            color: currentColor, text: '',
+        });
+        if (saved) createAnnotationEl({
+            id: saved.id, type: saved.type, page: saved.page,
+            x: saved.x, y: saved.y, width: saved.width, height: saved.height,
+            color: saved.color, text: '',
+        });
+    }
+    sel.removeAllRanges();
+    showToast(tool === 'highlight' ? 'Highlighted (H)' : 'Strikethrough (S)');
+});
+</script>
+{% endblock %}

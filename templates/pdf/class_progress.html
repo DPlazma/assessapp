@@ -1,0 +1,67 @@
+{% extends "pdf/base_pdf.html" %}
+{% block title %}Class Progress — {{ class_group.name }}{% endblock %}
+
+{% block extra_css %}
+.area-title { font-size: 12pt; font-weight: 700; margin-top: 6mm; margin-bottom: 2mm; color: #333; }
+.summary-bar { height: 5mm; border-radius: 2mm; overflow: hidden; display: flex; margin-bottom: 2mm; }
+.bar-sec { background-color: #198754; }
+.bar-dev { background-color: #fd7e14; }
+.bar-eme { background-color: #dc3545; }
+.bar-nya { background-color: #6c757d; }
+td.badge-cell { text-align: center; font-weight: 600; font-size: 8pt; padding: 1mm 2mm; }
+td.sec-cell { color: #198754; }
+td.dev-cell { color: #fd7e14; }
+td.eme-cell { color: #dc3545; }
+td.nya-cell { color: #6c757d; }
+.mini-progress { height: 3mm; border-radius: 1mm; overflow: hidden; display: flex; min-width: 25mm; }
+{% endblock %}
+
+{% block content %}
+<h1>{{ class_group.name }} — Class Progress</h1>
+<p class="meta">{{ period_label }} · {{ area_data|length }} areas · Generated {{ today|date:"d-m-Y" }}</p>
+
+{% for ad in area_data %}
+<div class="area-title">{{ ad.area.name }} <span style="font-weight:400;color:#888;font-size:9pt;">{{ ad.area.subject.name }}</span></div>
+
+<div class="summary-bar">
+    {% if ad.pcts.NYA %}<div class="bar-nya" style="width:{{ ad.pcts.NYA }}%"></div>{% endif %}
+    {% if ad.pcts.EME %}<div class="bar-eme" style="width:{{ ad.pcts.EME }}%"></div>{% endif %}
+    {% if ad.pcts.DEV %}<div class="bar-dev" style="width:{{ ad.pcts.DEV }}%"></div>{% endif %}
+    {% if ad.pcts.SEC %}<div class="bar-sec" style="width:{{ ad.pcts.SEC }}%"></div>{% endif %}
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>Student</th>
+            <th class="num">N</th>
+            <th class="num">E</th>
+            <th class="num">D</th>
+            <th class="num">S</th>
+            <th>Progress</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in ad.student_rows %}
+        <tr class="avoid-break">
+            <td style="white-space:nowrap;">{{ row.student.full_name }}</td>
+            <td class="badge-cell nya-cell">{{ row.counts.NYA }}</td>
+            <td class="badge-cell eme-cell">{{ row.counts.EME }}</td>
+            <td class="badge-cell dev-cell">{{ row.counts.DEV }}</td>
+            <td class="badge-cell sec-cell">{{ row.counts.SEC }}</td>
+            <td>
+                <div class="mini-progress">
+                    {% if row.pct_nya %}<div class="bar-nya" style="width:{{ row.pct_nya }}%"></div>{% endif %}
+                    {% if row.pct_emerging %}<div class="bar-eme" style="width:{{ row.pct_emerging }}%"></div>{% endif %}
+                    {% if row.pct_developing %}<div class="bar-dev" style="width:{{ row.pct_developing }}%"></div>{% endif %}
+                    {% if row.pct_secure %}<div class="bar-sec" style="width:{{ row.pct_secure }}%"></div>{% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% empty %}
+<p>No assessment areas found.</p>
+{% endfor %}
+{% endblock %}

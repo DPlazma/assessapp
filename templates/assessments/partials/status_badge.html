@@ -1,0 +1,20 @@
+{% load assess_tags %}
+{# HTMX partial: replaces a single statement row after recording #}
+<div class="statement-row" id="stmt-{{ statement.pk }}"
+     data-area-id="{{ statement.area_id }}"
+     data-sub-area-id="{{ statement.sub_area_id|default:'' }}"
+     data-status="{{ record.status }}">
+    <div class="statement-text">{{ statement.statement_text }}</div>
+    <div class="d-flex gap-1">
+        {% for code, label in status_choices %}
+        <button class="status-btn {% if record.status == code %}active status-{{ code }}{% else %}btn-outline-secondary{% endif %}"
+                hx-post="{% url 'assessments:record_assessment' student.pk statement.pk %}"
+                hx-vals='{"status": "{{ code }}"}'
+                hx-target="#stmt-{{ statement.pk }}"
+                hx-swap="outerHTML"
+                title="{{ label }}">
+            {{ label.0 }}
+        </button>
+        {% endfor %}
+    </div>
+</div>

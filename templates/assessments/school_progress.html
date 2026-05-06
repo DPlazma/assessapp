@@ -1,0 +1,523 @@
+{% extends "base.html" %}
+{% block title %}School Progress — AssessApp{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item active">School Progress</li>
+    </ol>
+</nav>
+
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <h5 class="mb-0"><i class="bi bi-building me-2"></i>Whole School Progress</h5>
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+        {# View toggle #}
+        <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-primary {% if view_mode == 'chart' %}active{% endif %}"
+                    onclick="setView('chart')">
+                <i class="bi bi-graph-up"></i> Chart
+            </button>
+            <button type="button" class="btn btn-outline-primary {% if view_mode == 'both' %}active{% endif %}"
+                    onclick="setView('both')">
+                <i class="bi bi-layout-split"></i> Both
+            </button>
+            <button type="button" class="btn btn-outline-primary {% if view_mode == 'table' %}active{% endif %}"
+                    onclick="setView('table')">
+                <i class="bi bi-table"></i> Table
+            </button>
+        </div>
+        {# Export #}
+        <div class="btn-group btn-group-sm">
+            <a href="{% url 'assessments:school_progress_export_excel' %}?{{ request.GET.urlencode }}"
+               class="btn btn-outline-success"><i class="bi bi-file-earmark-excel"></i> Excel</a>
+            <a href="{% url 'assessments:school_progress_export_pdf' %}?{{ request.GET.urlencode }}"
+               class="btn btn-outline-danger"><i class="bi bi-file-earmark-pdf"></i> PDF</a>
+        </div>
+    </div>
+</div>
+
+{# ── FILTER PANEL ────────────────────────────────────────────── #}
+<div class="card mb-4">
+    <div class="card-header bg-light d-flex align-items-center gap-2" style="cursor:pointer;"
+         data-bs-toggle="collapse" data-bs-target="#filterPanel">
+        <i class="bi bi-funnel me-1"></i>
+        <strong>Filters</strong>
+        <span class="text-muted small ms-2">{{ period_label }}</span>
+        <i class="bi bi-chevron-down collapse-icon ms-auto"></i>
+    </div>
+    <div class="collapse" id="filterPanel">
+        <div class="card-body">
+            <form method="get" id="filterForm">
+                <input type="hidden" name="view" id="viewInput" value="{{ view_mode }}">
+                <div class="row g-3">
+                    {# Time #}
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-bold small">Academic Year</label>
+                        <select name="academic_year" class="form-select form-select-sm" onchange="clearTermAndDates(this.form)">
+                            <option value="">Any</option>
+                            {% for ay in academic_years %}
+                            <option value="{{ ay.pk }}" {% if selected_academic_year == ay.pk|stringformat:"d" %}selected{% endif %}>
+                                {{ ay.name }}{% if ay.is_current %} (current){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-bold small">Term</label>
+                        <select name="term" class="form-select form-select-sm" onchange="clearDates(this.form)">
+                            <option value="">Any</option>
+                            {% for t in terms %}
+                            <option value="{{ t.pk }}" {% if selected_term == t.pk|stringformat:"d" %}selected{% endif %}>{{ t }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-bold small">Date from</label>
+                        <input type="date" name="date_from" class="form-control form-control-sm"
+                               value="{{ date_from }}" onchange="clearTermAY(this.form)">
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-bold small">Date to</label>
+                        <input type="date" name="date_to" class="form-control form-control-sm"
+                               value="{{ date_to }}" onchange="clearTermAY(this.form)">
+                    </div>
+
+                    {# Subject + Area #}
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-bold small">Subject</label>
+                        <select name="subject" class="form-select form-select-sm">
+                            <option value="">All Subjects</option>
+                            {% for subj in subjects %}
+                            <option value="{{ subj.pk }}" {% if selected_subject == subj.pk|stringformat:"d" %}selected{% endif %}>{{ subj.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-bold small">Area</label>
+                        <select name="area" class="form-select form-select-sm">
+                            <option value="">All Areas</option>
+                            {% for a in all_areas %}
+                            <option value="{{ a.pk }}" {% if selected_area == a.pk|stringformat:"d" %}selected{% endif %}>{{ a.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {# Class filter #}
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-bold small">Classes</label>
+                        <select name="class_group" class="form-select form-select-sm" multiple size="4">
+                            {% for cg in all_classes %}
+                            <option value="{{ cg.pk }}" {% if cg.pk|stringformat:"d" in selected_classes %}selected{% endif %}>{{ cg.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text small">Hold Ctrl to select multiple</div>
+                    </div>
+
+                    {# Year group #}
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-bold small">Year Group</label>
+                        <div>
+                        {% for yg in year_groups_available %}
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" name="year_group"
+                                   value="{{ yg }}" id="yg-{{ yg }}"
+                                   {% if yg|stringformat:"d" in selected_year_groups %}checked{% endif %}>
+                            <label class="form-check-label small" for="yg-{{ yg }}">Y{{ yg }}</label>
+                        </div>
+                        {% endfor %}
+                        </div>
+                    </div>
+
+                    {# Pathway / Phase #}
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-bold small">Pathway</label>
+                        <div>
+                        {% for code, label in pathway_choices %}
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" name="pathway"
+                                   value="{{ code }}" id="pw-{{ code }}"
+                                   {% if code in selected_pathways %}checked{% endif %}>
+                            <label class="form-check-label small" for="pw-{{ code }}">{{ label }}</label>
+                        </div>
+                        {% endfor %}
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-bold small">Phase</label>
+                        <div>
+                        {% for val, label in phase_choices %}
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" name="phase"
+                                   value="{{ val }}" id="ph-{{ val }}"
+                                   {% if val|stringformat:"d" in selected_phases %}checked{% endif %}>
+                            <label class="form-check-label small" for="ph-{{ val }}">{{ label }}</label>
+                        </div>
+                        {% endfor %}
+                        </div>
+                    </div>
+
+                    {# Comparison #}
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-bold small">Compare with term</label>
+                        <select name="compare" class="form-select form-select-sm">
+                            <option value="">No comparison</option>
+                            {% for t in terms %}
+                            <option value="{{ t.pk }}" {% if compare == t.pk|stringformat:"d" %}selected{% endif %}>{{ t }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-6 col-lg-3 d-flex align-items-end">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="show" value="all"
+                                   id="showAll" {% if period_label == "All time" %}checked{% endif %}
+                                   onchange="if(this.checked){clearTermAY(this.form);clearDates(this.form);}">
+                            <label class="form-check-label small" for="showAll">Show all time</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i> Apply Filters</button>
+                    <a href="{% url 'assessments:school_progress' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-circle"></i> Clear</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    .progress-table th, .progress-table td { font-size: 0.85rem; vertical-align: middle; }
+    .mini-bar { height: 6px; border-radius: 3px; overflow: hidden; min-width: 60px; }
+    .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 992px) { .comparison-grid { grid-template-columns: 1fr; } }
+</style>
+
+{# ── GRAND SUMMARY ───────────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-secondary">
+            <div class="card-body py-2">
+                <div class="fs-3 fw-bold text-secondary">{{ grand_totals.NYA }}</div>
+                <div class="small text-muted">Not Assessed ({{ grand_pcts.NYA }}%)</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-info">
+            <div class="card-body py-2">
+                <div class="fs-3 fw-bold text-danger">{{ grand_totals.EME }}</div>
+                <div class="small text-muted">Emerging ({{ grand_pcts.EME }}%)</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-warning">
+            <div class="card-body py-2">
+                <div class="fs-3 fw-bold text-warning">{{ grand_totals.DEV }}</div>
+                <div class="small text-muted">Developing ({{ grand_pcts.DEV }}%)</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-success">
+            <div class="card-body py-2">
+                <div class="fs-3 fw-bold text-success">{{ grand_totals.SEC }}</div>
+                <div class="small text-muted">Secure ({{ grand_pcts.SEC }}%)</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Grand progress bar #}
+<div class="d-flex rounded overflow-hidden mb-4" style="height: 22px;">
+    {% if grand_pcts.NYA %}<div class="bg-secondary d-flex align-items-center justify-content-center text-white small" style="width:{{ grand_pcts.NYA }}%">{% if grand_pcts.NYA > 8 %}{{ grand_pcts.NYA }}%{% endif %}</div>{% endif %}
+    {% if grand_pcts.EME %}<div class="bg-danger d-flex align-items-center justify-content-center text-white small" style="width:{{ grand_pcts.EME }}%">{% if grand_pcts.EME > 8 %}{{ grand_pcts.EME }}%{% endif %}</div>{% endif %}
+    {% if grand_pcts.DEV %}<div class="bg-warning d-flex align-items-center justify-content-center text-dark small" style="width:{{ grand_pcts.DEV }}%">{% if grand_pcts.DEV > 8 %}{{ grand_pcts.DEV }}%{% endif %}</div>{% endif %}
+    {% if grand_pcts.SEC %}<div class="bg-success d-flex align-items-center justify-content-center text-white small" style="width:{{ grand_pcts.SEC }}%">{% if grand_pcts.SEC > 8 %}{{ grand_pcts.SEC }}%{% endif %}</div>{% endif %}
+</div>
+
+{# ── CHART ─────────────────────────────────────────────────────── #}
+{% if view_mode != "table" and chart_data_json != "{}" %}
+<div class="card mb-4">
+    <div class="card-header bg-light">
+        <strong><i class="bi bi-graph-up me-1"></i>Class Progress Over Time</strong>
+        <span class="text-muted small ms-2">{{ period_label }} · One line per class</span>
+    </div>
+    <div class="card-body">
+        <div style="position: relative; height: 380px;">
+            <canvas id="schoolProgressChart"></canvas>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── COMPARISON ───────────────────────────────────────────────── #}
+{% if compare_data %}
+<div class="card mb-4 border-info">
+    <div class="card-header bg-info bg-opacity-10">
+        <strong><i class="bi bi-arrow-left-right me-1"></i>Comparison: {{ period_label }} vs {{ compare_label }}</strong>
+    </div>
+    <div class="card-body">
+        <div class="comparison-grid">
+            <div>
+                <h6 class="text-center mb-3">{{ period_label }}</h6>
+                {% for cd in class_data %}
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fw-bold small">{{ cd.class_group.name }}</span>
+                        <span class="d-flex gap-1">
+                            <span class="badge bg-secondary">N {{ cd.totals.NYA }}</span>
+                            <span class="badge bg-danger">E {{ cd.totals.EME }}</span>
+                            <span class="badge bg-warning text-dark">D {{ cd.totals.DEV }}</span>
+                            <span class="badge bg-success">S {{ cd.totals.SEC }}</span>
+                        </span>
+                    </div>
+                    <div class="d-flex rounded overflow-hidden" style="height: 10px;">
+                        {% if cd.pcts.NYA %}<div class="bg-secondary" style="width:{{ cd.pcts.NYA }}%"></div>{% endif %}
+                        {% if cd.pcts.EME %}<div class="bg-danger" style="width:{{ cd.pcts.EME }}%"></div>{% endif %}
+                        {% if cd.pcts.DEV %}<div class="bg-warning" style="width:{{ cd.pcts.DEV }}%"></div>{% endif %}
+                        {% if cd.pcts.SEC %}<div class="bg-success" style="width:{{ cd.pcts.SEC }}%"></div>{% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div>
+                <h6 class="text-center mb-3">{{ compare_label }}</h6>
+                {% for cd in compare_data %}
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="fw-bold small">{{ cd.class_group.name }}</span>
+                        <span class="d-flex gap-1">
+                            <span class="badge bg-secondary">N {{ cd.totals.NYA }}</span>
+                            <span class="badge bg-danger">E {{ cd.totals.EME }}</span>
+                            <span class="badge bg-warning text-dark">D {{ cd.totals.DEV }}</span>
+                            <span class="badge bg-success">S {{ cd.totals.SEC }}</span>
+                        </span>
+                    </div>
+                    <div class="d-flex rounded overflow-hidden" style="height: 10px;">
+                        {% if cd.pcts.NYA %}<div class="bg-secondary" style="width:{{ cd.pcts.NYA }}%"></div>{% endif %}
+                        {% if cd.pcts.EME %}<div class="bg-danger" style="width:{{ cd.pcts.EME }}%"></div>{% endif %}
+                        {% if cd.pcts.DEV %}<div class="bg-warning" style="width:{{ cd.pcts.DEV }}%"></div>{% endif %}
+                        {% if cd.pcts.SEC %}<div class="bg-success" style="width:{{ cd.pcts.SEC }}%"></div>{% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── CLASS TABLE ──────────────────────────────────────────────── #}
+{% if view_mode != "chart" %}
+<div class="card mb-4">
+    <div class="card-header bg-light">
+        <strong><i class="bi bi-table me-1"></i>Progress by Class</strong>
+        <span class="text-muted small ms-2">{{ class_data|length }} classes · {{ period_label }}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table progress-table mb-0">
+            <thead>
+                <tr>
+                    <th>Class</th>
+                    <th class="text-center" style="width:70px;">Students</th>
+                    <th class="text-center" style="width:55px;">N</th>
+                    <th class="text-center" style="width:55px;">E</th>
+                    <th class="text-center" style="width:55px;">D</th>
+                    <th class="text-center" style="width:55px;">S</th>
+                    <th style="min-width:140px;">Progress</th>
+                    <th style="width:50px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cd in class_data %}
+                <tr>
+                    <td class="fw-bold">
+                        <a href="{% url 'assessments:class_progress' cd.class_group.pk %}?{{ request.GET.urlencode }}"
+                           class="text-decoration-none">
+                            {{ cd.class_group.name }}
+                        </a>
+                        {% if cd.class_group.year_group %}
+                        <span class="text-muted small">Y{{ cd.class_group.year_group }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">{{ cd.student_count }}</td>
+                    <td class="text-center"><span class="badge bg-secondary">{{ cd.totals.NYA }}</span></td>
+                    <td class="text-center"><span class="badge bg-danger">{{ cd.totals.EME }}</span></td>
+                    <td class="text-center"><span class="badge bg-warning text-dark">{{ cd.totals.DEV }}</span></td>
+                    <td class="text-center"><span class="badge bg-success">{{ cd.totals.SEC }}</span></td>
+                    <td>
+                        <div class="d-flex mini-bar">
+                            {% if cd.pcts.NYA %}<div class="bg-secondary" style="width:{{ cd.pcts.NYA }}%"></div>{% endif %}
+                            {% if cd.pcts.EME %}<div class="bg-danger" style="width:{{ cd.pcts.EME }}%"></div>{% endif %}
+                            {% if cd.pcts.DEV %}<div class="bg-warning" style="width:{{ cd.pcts.DEV }}%"></div>{% endif %}
+                            {% if cd.pcts.SEC %}<div class="bg-success" style="width:{{ cd.pcts.SEC }}%"></div>{% endif %}
+                        </div>
+                    </td>
+                    <td>
+                        <a href="#" data-bs-toggle="collapse" data-bs-target="#class-detail-{{ cd.class_group.pk }}"
+                           class="text-muted" title="Expand areas">
+                            <i class="bi bi-chevron-down collapse-icon"></i>
+                        </a>
+                    </td>
+                </tr>
+                {# Expandable area breakdown #}
+                <tr class="collapse" id="class-detail-{{ cd.class_group.pk }}">
+                    <td colspan="8" class="p-0">
+                        <table class="table table-sm mb-0 ms-4" style="width: calc(100% - 2rem);">
+                            {% for ar in cd.area_rows %}
+                            <tr>
+                                <td class="small">
+                                    {{ ar.area.name }}
+                                    <span class="text-muted">{{ ar.area.subject.name }}</span>
+                                </td>
+                                <td class="text-center" style="width:50px;"><span class="badge bg-secondary">{{ ar.totals.NYA }}</span></td>
+                                <td class="text-center" style="width:50px;"><span class="badge bg-danger">{{ ar.totals.EME }}</span></td>
+                                <td class="text-center" style="width:50px;"><span class="badge bg-warning text-dark">{{ ar.totals.DEV }}</span></td>
+                                <td class="text-center" style="width:50px;"><span class="badge bg-success">{{ ar.totals.SEC }}</span></td>
+                                <td style="min-width:80px;">
+                                    <div class="d-flex mini-bar" style="height:5px;">
+                                        {% if ar.pcts.NYA %}<div class="bg-secondary" style="width:{{ ar.pcts.NYA }}%"></div>{% endif %}
+                                        {% if ar.pcts.EME %}<div class="bg-danger" style="width:{{ ar.pcts.EME }}%"></div>{% endif %}
+                                        {% if ar.pcts.DEV %}<div class="bg-warning" style="width:{{ ar.pcts.DEV }}%"></div>{% endif %}
+                                        {% if ar.pcts.SEC %}<div class="bg-success" style="width:{{ ar.pcts.SEC }}%"></div>{% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </table>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-center text-muted py-4">
+                        No classes with active students found.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{# ── CHART.JS ─────────────────────────────────────────────────── #}
+{% if view_mode != "table" and chart_data_json != "{}" %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const chartData = JSON.parse('{{ chart_data_json|escapejs }}');
+    const statusLabels = {0: 'NYA', 1: 'Emerging', 2: 'Developing', 3: 'Secure'};
+    const colours = [
+        '#0d6efd','#198754','#fd7e14','#dc3545','#6f42c1','#20c997',
+        '#d63384','#ffc107','#0dcaf0','#6610f2','#e91e63','#795548',
+        '#607d8b','#8bc34a','#ff5722','#3f51b5','#009688','#cddc39',
+    ];
+
+    function formatDate(iso) { const [y,m,d] = iso.split('-'); return d+'-'+m+'-'+y; }
+
+    const datasets = [];
+    const allDates = new Set();
+    let colIdx = 0;
+
+    for (const [className, points] of Object.entries(chartData)) {
+        points.forEach(p => allDates.add(p.date));
+        datasets.push({
+            label: className,
+            data: points.map(p => ({
+                x: p.date, y: p.avg,
+                count: p.count, day: p.day,
+                sec: p.sec, dev: p.dev, eme: p.eme, nya: p.nya,
+            })),
+            borderColor: colours[colIdx % colours.length],
+            backgroundColor: colours[colIdx % colours.length],
+            tension: 0.3,
+            fill: false,
+            borderWidth: 2.5,
+            pointRadius: 3,
+        });
+        colIdx++;
+    }
+
+    new Chart(document.getElementById('schoolProgressChart'), {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'category',
+                    labels: [...allDates].sort(),
+                    title: { display: true, text: 'Date' },
+                    ticks: { callback: function(value) { return formatDate(this.getLabelForValue(value)); } },
+                },
+                y: {
+                    min: 0, max: 3,
+                    ticks: {
+                        stepSize: 1,
+                        callback: function(v) { return statusLabels[v] || ''; },
+                    },
+                    title: { display: true, text: 'Cumulative Average Status' },
+                },
+            },
+            plugins: {
+                tooltip: {
+                    displayColors: true,
+                    callbacks: {
+                        title: function(items) {
+                            return formatDate(items[0].raw.x);
+                        },
+                        label: function(ctx) {
+                            const p = ctx.raw;
+                            return ctx.dataset.label + ': ' + statusLabels[Math.round(p.y)] + ' (' + p.y.toFixed(2) + ')';
+                        },
+                        afterLabel: function(ctx) {
+                            const p = ctx.raw;
+                            const lines = [];
+                            lines.push('Based on ' + p.count + ' assessment' + (p.count !== 1 ? 's' : '') + ' to date');
+                            lines.push('  NYA: ' + p.nya + '  Emerging: ' + p.eme);
+                            lines.push('  Developing: ' + p.dev + '  Secure: ' + p.sec);
+                            lines.push(p.day + ' recorded on this date');
+                            return lines;
+                        },
+                    },
+                },
+                legend: {
+                    position: 'bottom',
+                    labels: { boxWidth: 14, padding: 12, font: { size: 12 } },
+                },
+            },
+        },
+    });
+});
+</script>
+{% endif %}
+
+{# ── JS ───────────────────────────────────────────────────────── #}
+<script>
+function setView(mode) {
+    var params = new URLSearchParams(window.location.search);
+    params.set('view', mode);
+    window.location.search = params.toString();
+}
+function clearTermAndDates(form) {
+    form.querySelector('[name="term"]').value = '';
+    form.querySelector('[name="date_from"]').value = '';
+    form.querySelector('[name="date_to"]').value = '';
+    var s = form.querySelector('[name="show"]'); if (s) s.checked = false;
+}
+function clearDates(form) {
+    form.querySelector('[name="date_from"]').value = '';
+    form.querySelector('[name="date_to"]').value = '';
+    var s = form.querySelector('[name="show"]'); if (s) s.checked = false;
+}
+function clearTermAY(form) {
+    form.querySelector('[name="academic_year"]').value = '';
+    form.querySelector('[name="term"]').value = '';
+    var s = form.querySelector('[name="show"]'); if (s) s.checked = false;
+}
+</script>
+
+{% endblock %}

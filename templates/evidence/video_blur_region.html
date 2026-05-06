@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}Video Blur Region — {{ item.title }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'evidence:evidence_detail' item.pk %}" class="text-decoration-none">
+        <i class="bi bi-arrow-left me-1"></i>Back to evidence
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-9">
+        <div class="card mb-3">
+            <div class="card-header bg-white">
+                <h5 class="mb-0"><i class="bi bi-camera-video me-2"></i>Video Blur Region</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-2">
+                    Draw a rectangle over the area you want to blur. This region will be blurred throughout the entire video.
+                    Use the slider to pick a thumbnail frame.
+                </p>
+
+                <div class="position-relative d-inline-block" id="video-container" style="max-width: 100%;">
+                    <video id="source-video" style="display: none;" preload="auto">
+                        <source src="{{ item.file.url }}?v={{ item.updated_at|date:'U' }}" type="video/mp4">
+                    </video>
+                    <canvas id="video-canvas" style="max-width: 100%; cursor: crosshair; touch-action: none;"></canvas>
+                </div>
+
+                <div class="mt-3">
+                    <label class="form-label small text-muted">Scrub to select thumbnail frame:</label>
+                    <div class="d-flex align-items-center gap-2">
+                        <input type="range" id="timeline-slider" min="0" max="100" step="0.1" value="0"
+                               class="form-range flex-grow-1">
+                        <span class="small text-muted" id="time-display">0:00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <form method="post" action="{% url 'evidence:video_apply_blur_region' item.pk %}" id="video-blur-form">
+            {% csrf_token %}
+            <input type="hidden" name="blur_region" id="blur-region" value="">
+            <input type="hidden" name="thumbnail_time" id="thumbnail-time" value="0">
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary" id="btn-process">
+                    <i class="bi bi-check-circle me-1"></i>Process &amp; Save
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="btn-clear-region">
+                    <i class="bi bi-eraser me-1"></i>Clear Region
+                </button>
+                <a href="{% url 'evidence:evidence_detail' item.pk %}" class="btn btn-outline-secondary">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <div class="col-lg-3">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-info-circle me-1"></i>Instructions</h6>
+            </div>
+            <div class="card-body small">
+                <ol class="mb-0 ps-3">
+                    <li class="mb-2">Use the timeline slider to find a representative frame</li>
+                    <li class="mb-2">Click and drag to draw a rectangle over the area to blur</li>
+                    <li class="mb-2">The rectangle will be blurred in every frame of the video</li>
+                    <li class="mb-2">The selected frame becomes the thumbnail preview</li>
+                    <li class="mb-2">Click <strong>Process &amp; Save</strong></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const video = document.getElementById('source-video');
+    const canvas = document.getElementById('video-canvas');
+    const ctx = canvas.getContext('2d');
+    const slider = document.getElementById('timeline-slider');
+    const timeDisplay = document.getElementById('time-display');
+    const regionInput = document.getElementById('blur-region');
+    const thumbTimeInput = document.getElementById('thumbnail-time');
+
+    let blurRect = null;  // {x, y, w, h} in original video coords
+    let drawing = false;
+    let startX = 0, startY = 0;
+    let scale = 1;
+
+    video.addEventListener('loadedmetadata', function() {
+        const container = document.getElementById('video-container');
+        const maxW = container.offsetWidth || 800;
+        scale = Math.min(1, maxW / video.videoWidth);
+
+        canvas.width = Math.round(video.videoWidth * scale);
+        canvas.height = Math.round(video.videoHeight * scale);
+        canvas.dataset.scale = scale;
+
+        slider.max = video.duration;
+        video.currentTime = 0;
+    });
+
+    video.addEventListener('seeked', function() {
+        drawFrame();
+    });
+
+    video.addEventListener('loadeddata', function() {
+        drawFrame();
+    });
+
+    slider.addEventListener('input', function() {
+        video.currentTime = parseFloat(this.value);
+        thumbTimeInput.value = this.value;
+        const mins = Math.floor(video.currentTime / 60);
+        const secs = Math.floor(video.currentTime % 60);
+        timeDisplay.textContent = mins + ':' + String(secs).padStart(2, '0');
+    });
+
+    function drawFrame() {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        if (blurRect) {
+            const r = blurRect;
+            const sx = scale;
+            ctx.strokeStyle = '#dc3545';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([8, 4]);
+            ctx.strokeRect(r.x * sx, r.y * sx, r.w * sx, r.h * sx);
+            ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(220, 53, 69, 0.2)';
+            ctx.fillRect(r.x * sx, r.y * sx, r.w * sx, r.h * sx);
+
+            ctx.fillStyle = '#dc3545';
+            ctx.font = 'bold 13px sans-serif';
+            ctx.fillText('Blur region', r.x * sx + 4, r.y * sx - 6);
+        }
+    }
+
+    function getCanvasPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        if (e.touches) {
+            return {
+                x: (e.touches[0].clientX - rect.left) * scaleX,
+                y: (e.touches[0].clientY - rect.top) * scaleY,
+            };
+        }
+        return {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY,
+        };
+    }
+
+    function startDraw(e) {
+        e.preventDefault();
+        drawing = true;
+        const pos = getCanvasPos(e);
+        startX = pos.x;
+        startY = pos.y;
+    }
+
+    function moveDraw(e) {
+        if (!drawing) return;
+        e.preventDefault();
+        const pos = getCanvasPos(e);
+        const sx = scale;
+        blurRect = {
+            x: Math.round(Math.min(startX, pos.x) / sx),
+            y: Math.round(Math.min(startY, pos.y) / sx),
+            w: Math.round(Math.abs(pos.x - startX) / sx),
+            h: Math.round(Math.abs(pos.y - startY) / sx),
+        };
+        drawFrame();
+    }
+
+    function endDraw(e) {
+        if (!drawing) return;
+        drawing = false;
+        updateRegion();
+    }
+
+    canvas.addEventListener('mousedown', startDraw);
+    canvas.addEventListener('mousemove', moveDraw);
+    canvas.addEventListener('mouseup', endDraw);
+    canvas.addEventListener('mouseleave', endDraw);
+    canvas.addEventListener('touchstart', startDraw, {passive: false});
+    canvas.addEventListener('touchmove', moveDraw, {passive: false});
+    canvas.addEventListener('touchend', endDraw);
+
+    function updateRegion() {
+        if (blurRect && blurRect.w > 5 && blurRect.h > 5) {
+            regionInput.value = JSON.stringify(blurRect);
+        } else {
+            regionInput.value = '';
+        }
+    }
+
+    document.getElementById('btn-clear-region').addEventListener('click', function() {
+        blurRect = null;
+        regionInput.value = '';
+        drawFrame();
+    });
+})();
+</script>
+{% endblock %}

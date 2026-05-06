@@ -1,0 +1,55 @@
+<!-- EHCP Targets Overview -->
+{% with targets=widget.extra_context.ehcp_targets counts=widget.extra_context.ehcp_status_counts total=widget.extra_context.ehcp_total %}
+{% if targets %}
+<div class="mb-3">
+    <div class="d-flex gap-2 flex-wrap small">
+        {% if counts.NOT_STARTED %}
+        <span class="badge bg-secondary">Not Started {{ counts.NOT_STARTED }}</span>
+        {% endif %}
+        {% if counts.IN_PROGRESS %}
+        <span class="badge bg-info">In Progress {{ counts.IN_PROGRESS }}</span>
+        {% endif %}
+        {% if counts.PARTIALLY_MET %}
+        <span class="badge bg-warning text-dark">Partially Met {{ counts.PARTIALLY_MET }}</span>
+        {% endif %}
+        {% if counts.MET %}
+        <span class="badge bg-success">Met {{ counts.MET }}</span>
+        {% endif %}
+        {% if counts.EXCEEDED %}
+        <span class="badge bg-primary">Exceeded {{ counts.EXCEEDED }}</span>
+        {% endif %}
+    </div>
+</div>
+
+<div class="list-group list-group-flush">
+    {% for target in targets|slice:":8" %}
+    <div class="list-group-item px-0 py-2 small">
+        <div class="d-flex align-items-start">
+            {% if target.status == "MET" or target.status == "EXCEEDED" %}
+            <i class="bi bi-check-circle-fill text-success me-2 mt-1"></i>
+            {% elif target.status == "IN_PROGRESS" %}
+            <i class="bi bi-arrow-repeat text-info me-2 mt-1"></i>
+            {% elif target.status == "PARTIALLY_MET" %}
+            <i class="bi bi-circle-half text-warning me-2 mt-1"></i>
+            {% else %}
+            <i class="bi bi-circle text-secondary me-2 mt-1"></i>
+            {% endif %}
+            <div>
+                <strong>{{ target.student.full_name }}</strong><br>
+                <span class="text-muted">{{ target.title|truncatechars:60 }}</span>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if total > 8 %}
+<div class="text-muted small mt-2">+ {{ total|add:"-8" }} more targets</div>
+{% endif %}
+{% else %}
+<div class="text-center text-muted py-3">
+    <i class="bi bi-bullseye" style="font-size: 2rem;"></i>
+    <p class="small mb-0 mt-2">No EHCP targets for this class.</p>
+</div>
+{% endif %}
+{% endwith %}

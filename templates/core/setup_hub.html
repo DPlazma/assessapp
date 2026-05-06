@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Setup — AssessApp{% endblock %}
+
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-gear me-2"></i>Setup</h4>
+
+<div class="row g-3">
+    {% for s in sections %}
+    <div class="col-sm-6 col-lg-4">
+        {% if s.url %}
+        <a href="{% url s.url %}" class="text-decoration-none">
+        {% endif %}
+            <div class="card h-100 {% if s.url %}shadow-sm{% else %}bg-light{% endif %}">
+                <div class="card-body text-center py-4">
+                    <i class="bi {{ s.icon }} fs-1 text-{{ s.colour }} mb-3 d-block"></i>
+                    <h5 class="card-title mb-1">{{ s.title }}</h5>
+                    <p class="card-text text-muted small mb-0">{{ s.desc }}</p>
+                    {% if not s.url %}
+                    <span class="badge bg-warning text-dark mt-2">Coming soon</span>
+                    {% endif %}
+                </div>
+            </div>
+        {% if s.url %}
+        </a>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

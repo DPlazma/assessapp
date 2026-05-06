@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}{{ item.title }} — Evidence{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        {% if student %}
+        {% include "students/_student_nav.html" with student_nav="evidence" %}
+        {% else %}
+        <a href="{% url 'evidence:evidence_gallery_all' %}" class="text-decoration-none text-muted small">
+            <i class="bi bi-arrow-left me-1"></i>Back to evidence gallery
+        </a>
+        {% endif %}
+
+        <!-- Media Display -->
+        <div class="mt-2 mb-3">
+            {% if item.is_image %}
+            <img src="{{ item.file.url }}?v={{ item.updated_at|date:'U' }}" alt="{{ item.title }}"
+                 class="img-fluid rounded shadow-sm" style="max-height: 500px;">
+            {% elif item.is_video %}
+            <video controls class="w-100 rounded shadow-sm" style="max-height: 500px;">
+                <source src="{{ item.file.url }}?v={{ item.updated_at|date:'U' }}" type="video/mp4">
+                Your browser does not support video playback.
+            </video>
+            {% else %}
+            <div class="card bg-light text-center py-5">
+                <i class="bi bi-file-earmark-text" style="font-size: 4rem;"></i>
+                <p class="mt-2">
+                    <a href="{{ item.file.url }}" class="btn btn-outline-primary btn-sm" target="_blank">
+                        <i class="bi bi-download me-1"></i>Download File
+                    </a>
+                </p>
+            </div>
+            {% endif %}
+        </div>
+
+        <h5>{{ item.title }}</h5>
+        {% if item.description %}
+        <p class="text-muted">{{ item.description }}</p>
+        {% endif %}
+    </div>
+
+    <div class="col-lg-4">
+        <!-- Linked Students -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="card-title text-muted small text-uppercase mb-0">Linked Students</h6>
+                    <a href="{% url 'evidence:evidence_link_students' item.pk %}" class="btn btn-outline-primary btn-sm py-0 px-2" title="Edit links">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                </div>
+                {% if student_links %}
+                {% for link in student_links %}
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <span class="small fw-semibold">{{ link.student.full_name }}</span>
+                    {% if link.ehcp_target %}
+                    <a href="{% url 'evidence:ehcp_target_detail' link.ehcp_target.pk %}"
+                       class="badge bg-info text-decoration-none" title="{{ link.ehcp_target.title }}">
+                        <i class="bi bi-bullseye me-1"></i>{{ link.ehcp_target.title|truncatechars:20 }}
+                    </a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="text-center py-2">
+                    <span class="badge bg-warning text-dark">
+                        <i class="bi bi-exclamation-triangle me-1"></i>Unlinked
+                    </span>
+                    <p class="small text-muted mt-1 mb-0">
+                        <a href="{% url 'evidence:evidence_link_students' item.pk %}">Link to students</a>
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Details -->
+        <div class="card">
+            <div class="card-body">
+                <h6 class="card-title text-muted small text-uppercase">Details</h6>
+
+                <dl class="mb-0">
+                    <dt class="small text-muted">Type</dt>
+                    <dd>{{ item.get_evidence_type_display }}</dd>
+
+                    <dt class="small text-muted">Date Captured</dt>
+                    <dd>{{ item.captured_date|date:"d-m-Y" }}</dd>
+
+                    <dt class="small text-muted">Uploaded By</dt>
+                    <dd>{{ item.uploaded_by.get_full_name|default:item.uploaded_by.username }}</dd>
+
+                    <dt class="small text-muted">Uploaded</dt>
+                    <dd>{{ item.created_at|date:"d-m-Y H:i" }}</dd>
+
+                    {% if item.subject %}
+                    <dt class="small text-muted">Subject</dt>
+                    <dd>{{ item.subject.name }}</dd>
+                    {% endif %}
+
+                    <dt class="small text-muted">Sharing</dt>
+                    <dd>
+                        <span hx-post="{% url 'evidence:evidence_toggle_share' item.pk %}"
+                              hx-swap="outerHTML"
+                              style="cursor: pointer;" title="Click to toggle">
+                            {% if item.is_shared_with_family %}
+                            <span class="badge bg-success"><i class="bi bi-people-fill me-1"></i>Shared</span>
+                            {% else %}
+                            <span class="badge bg-secondary"><i class="bi bi-lock-fill me-1"></i>Private</span>
+                            {% endif %}
+                        </span>
+                        {% if item.shared_at %}
+                        <br><small class="text-muted">
+                            Shared {{ item.shared_at|date:"d-m-Y" }} by {{ item.shared_by.get_full_name|default:"—" }}
+                        </small>
+                        {% endif %}
+                    </dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="d-grid gap-2 mt-3">
+            {% if item.is_image %}
+            <a href="{% url 'evidence:evidence_blur' item.pk %}" class="btn btn-outline-warning btn-sm">
+                <i class="bi bi-person-bounding-box me-1"></i>Auto Blur Faces
+            </a>
+            <a href="{% url 'evidence:evidence_manual_blur' item.pk %}" class="btn btn-outline-info btn-sm">
+                <i class="bi bi-brush me-1"></i>Manual Blur Brush
+            </a>
+            {% endif %}
+            {% if item.is_video %}
+            <a href="{% url 'evidence:video_blur_region' item.pk %}" class="btn btn-outline-warning btn-sm">
+                <i class="bi bi-bounding-box me-1"></i>Blur Video Region
+            </a>
+            <a href="{% url 'evidence:video_face_blur' item.pk %}" class="btn btn-outline-info btn-sm">
+                <i class="bi bi-person-bounding-box me-1"></i>AI Blur Faces
+            </a>
+            {% endif %}
+            <a href="{{ item.file.url }}" class="btn btn-outline-primary btn-sm" download>
+                <i class="bi bi-download me-1"></i>Download
+            </a>
+            <a href="{% url 'evidence:evidence_delete' item.pk %}" class="btn btn-outline-danger btn-sm">
+                <i class="bi bi-trash me-1"></i>Delete
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

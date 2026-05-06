@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}{% if ay %}Edit{% else %}New{% endif %} Academic Year — AssessApp{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'core:academic_year_setup' %}">Academic Year Setup</a></li>
+        <li class="breadcrumb-item active">{% if ay %}Edit {{ ay.name }}{% else %}New Academic Year{% endif %}</li>
+    </ol>
+</nav>
+
+<h4 class="mb-3">{% if ay %}<i class="bi bi-pencil me-2"></i>Edit {{ ay.name }}{% else %}<i class="bi bi-plus-lg me-2"></i>New Academic Year{% endif %}</h4>
+
+<form method="post">
+    {% csrf_token %}
+
+    <div class="card mb-3">
+        <div class="card-header fw-bold">Year Details</div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
+                    <input type="text" name="name" id="name" class="form-control"
+                           value="{{ ay.name|default:'' }}" placeholder="e.g. 2025-2026" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="start_date" class="form-label">Start Date <span class="text-danger">*</span></label>
+                    <input type="date" name="start_date" id="start_date" class="form-control"
+                           value="{% if ay %}{{ ay.start_date|date:'Y-m-d' }}{% endif %}" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="end_date" class="form-label">End Date <span class="text-danger">*</span></label>
+                    <input type="date" name="end_date" id="end_date" class="form-control"
+                           value="{% if ay %}{{ ay.end_date|date:'Y-m-d' }}{% endif %}" required>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="is_current" id="is_current"
+                               {% if ay.is_current %}checked{% endif %}>
+                        <label class="form-check-label" for="is_current">Current year</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header fw-bold">Term Dates</div>
+        <div class="card-body">
+            <div class="row g-3">
+                {% with term_codes="AUT,SPR,SUM" %}
+                {% for code_label in "Autumn:AUT,Spring:SPR,Summer:SUM" %}
+                {% with parts=code_label %}
+                {% endwith %}
+                {% endfor %}
+                {% endwith %}
+
+                {# Autumn #}
+                <div class="col-md-4">
+                    <div class="border rounded p-3">
+                        <h6><i class="bi bi-tree me-1"></i>Autumn Term</h6>
+                        <div class="mb-2">
+                            <label class="form-label mb-1">Start</label>
+                            <input type="date" name="AUT_start" class="form-control form-control-sm"
+                                   value="{% if terms.AUT %}{{ terms.AUT.start_date|date:'Y-m-d' }}{% endif %}">
+                        </div>
+                        <div>
+                            <label class="form-label mb-1">End</label>
+                            <input type="date" name="AUT_end" class="form-control form-control-sm"
+                                   value="{% if terms.AUT %}{{ terms.AUT.end_date|date:'Y-m-d' }}{% endif %}">
+                        </div>
+                    </div>
+                </div>
+
+                {# Spring #}
+                <div class="col-md-4">
+                    <div class="border rounded p-3">
+                        <h6><i class="bi bi-flower1 me-1"></i>Spring Term</h6>
+                        <div class="mb-2">
+                            <label class="form-label mb-1">Start</label>
+                            <input type="date" name="SPR_start" class="form-control form-control-sm"
+                                   value="{% if terms.SPR %}{{ terms.SPR.start_date|date:'Y-m-d' }}{% endif %}">
+                        </div>
+                        <div>
+                            <label class="form-label mb-1">End</label>
+                            <input type="date" name="SPR_end" class="form-control form-control-sm"
+                                   value="{% if terms.SPR %}{{ terms.SPR.end_date|date:'Y-m-d' }}{% endif %}">
+                        </div>
+                    </div>
+                </div>
+
+                {# Summer #}
+                <div class="col-md-4">
+                    <div class="border rounded p-3">
+                        <h6><i class="bi bi-sun me-1"></i>Summer Term</h6>
+                        <div class="mb-2">
+                            <label class="form-label mb-1">Start</label>
+                            <input type="date" name="SUM_start" class="form-control form-control-sm"
+                                   value="{% if terms.SUM %}{{ terms.SUM.start_date|date:'Y-m-d' }}{% endif %}">
+                        </div>
+                        <div>
+                            <label class="form-label mb-1">End</label>
+                            <input type="date" name="SUM_end" class="form-control form-control-sm"
+                                   value="{% if terms.SUM %}{{ terms.SUM.end_date|date:'Y-m-d' }}{% endif %}">
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            <p class="form-text mt-2">Term dates are optional — leave blank if not yet known.</p>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i>{% if ay %}Save Changes{% else %}Create Academic Year{% endif %}
+        </button>
+        <a href="{% url 'core:academic_year_setup' %}" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+{% endblock %}

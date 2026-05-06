@@ -1,0 +1,99 @@
+<div id="steps-panel-{{ target.pk }}" class="border-top bg-light px-3 py-2">
+    {# ── Existing steps ─────────────────────────────────────────────── #}
+    {% if steps %}
+    <table class="table table-sm table-borderless align-middle mb-2" style="font-size: 0.85rem;">
+        <tbody>
+            {% for step in steps %}
+            <tr>
+                <td style="width: 40px;">
+                    <span class="badge bg-primary">{{ step.letter }}</span>
+                </td>
+                <td>
+                    <span class="step-text" id="step-text-{{ step.pk }}"
+                          ondblclick="this.style.display='none'; document.getElementById('step-edit-{{ step.pk }}').style.display='flex';"
+                          style="cursor: pointer;" title="Double-click to edit">
+                        {{ step.description }}
+                    </span>
+                    <form id="step-edit-{{ step.pk }}" style="display:none;"
+                          class="d-flex gap-1 align-items-center"
+                          hx-post="{% url 'evidence:small_step_edit_inline' step.pk %}"
+                          hx-target="#steps-panel-{{ target.pk }}"
+                          hx-swap="outerHTML">
+                        {% csrf_token %}
+                        <input type="text" name="description" value="{{ step.description }}"
+                               class="form-control form-control-sm flex-grow-1">
+                        <button type="submit" class="btn btn-success btn-sm py-0 px-1">
+                            <i class="bi bi-check-lg"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1"
+                                onclick="this.closest('form').style.display='none'; document.getElementById('step-text-{{ step.pk }}').style.display='';">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </form>
+                </td>
+                <td style="width: 140px;">
+                    <form hx-post="{% url 'evidence:small_step_update_status' step.pk %}"
+                          hx-target="#steps-panel-{{ target.pk }}"
+                          hx-swap="outerHTML">
+                        {% csrf_token %}
+                        <select name="status" class="form-select form-select-sm py-0
+                            {% if step.status == 'ACHIEVED' %}border-success text-success
+                            {% elif step.status == 'WORKING_ON' %}border-primary text-primary
+                            {% else %}border-secondary text-muted
+                            {% endif %}"
+                            style="font-size: 0.8rem;"
+                            onchange="this.form.requestSubmit()">
+                            <option value="NOT_STARTED" {% if step.status == "NOT_STARTED" %}selected{% endif %}>Not Started</option>
+                            <option value="WORKING_ON" {% if step.status == "WORKING_ON" %}selected{% endif %}>Working On</option>
+                            <option value="ACHIEVED" {% if step.status == "ACHIEVED" %}selected{% endif %}>Achieved</option>
+                        </select>
+                    </form>
+                </td>
+                <td style="width: 35px;" class="text-end">
+                    <button class="btn btn-link btn-sm text-danger p-0"
+                            hx-post="{% url 'evidence:small_step_delete_inline' step.pk %}"
+                            hx-target="#steps-panel-{{ target.pk }}"
+                            hx-swap="outerHTML"
+                            hx-confirm="Delete step {{ step.letter }}?"
+                            title="Delete">
+                        <i class="bi bi-x-circle" style="font-size: 0.85rem;"></i>
+                    </button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if steps|length > 1 %}
+    <div class="mb-2">
+        <div class="progress" style="height: 6px;">
+            {% for step in steps %}
+            <div class="progress-bar
+                {% if step.status == 'ACHIEVED' %}bg-success
+                {% elif step.status == 'WORKING_ON' %}bg-primary
+                {% else %}bg-light border
+                {% endif %}"
+                style="width: {% widthratio 1 steps|length 100 %}%"></div>
+            {% endfor %}
+        </div>
+        <small class="text-muted" style="font-size: 0.75rem;">{{ achieved_count }}/{{ steps|length }} achieved</small>
+    </div>
+    {% endif %}
+    {% else %}
+    <p class="text-muted small mb-2"><i class="bi bi-signpost-split me-1"></i>No small steps yet.</p>
+    {% endif %}
+
+    {# ── Add step form ──────────────────────────────────────────────── #}
+    <form hx-post="{% url 'evidence:small_step_add_inline' target.pk %}"
+          hx-target="#steps-panel-{{ target.pk }}"
+          hx-swap="outerHTML"
+          class="d-flex gap-1 align-items-center">
+        {% csrf_token %}
+        <input type="text" name="letter" class="form-control form-control-sm"
+               maxlength="2" style="width: 50px; font-size: 0.8rem;" placeholder="A" required>
+        <input type="text" name="description" class="form-control form-control-sm flex-grow-1"
+               style="font-size: 0.8rem;" placeholder="Step description..." required>
+        <button type="submit" class="btn btn-primary btn-sm py-0 px-2" style="font-size: 0.8rem;">
+            <i class="bi bi-plus-lg me-1"></i>Add
+        </button>
+    </form>
+</div>

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Cover a Class — AssessApp{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}">My Class</a></li>
+        <li class="breadcrumb-item active">Cover</li>
+    </ol>
+</nav>
+
+<h5 class="mb-3">Class Cover</h5>
+
+<!-- Active covers -->
+{% if active_covers %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h6 class="mb-0"><i class="bi bi-shield-check me-1"></i>Active Covers</h6>
+    </div>
+    <ul class="list-group list-group-flush">
+        {% for cover in active_covers %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+                <strong>{{ cover.class_group.name }}</strong>
+                <br>
+                <small class="text-muted">Since {{ cover.start_date|date:"d-m-Y" }} — ends {{ cover.end_date|date:"d-m-Y" }}</small>
+            </div>
+            <form method="post" action="{% url 'staff:end_cover' cover.pk %}" class="d-inline"
+                  onsubmit="return confirm('End cover for {{ cover.class_group.name }}?')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-x-circle me-1"></i>End
+                </button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<!-- Available classes to cover -->
+{% if available_classes %}
+<div class="card">
+    <div class="card-header">
+        <h6 class="mb-0"><i class="bi bi-plus-circle me-1"></i>Start Covering</h6>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small">Tap a class to start covering it. You'll be able to assess its students until the cover ends.</p>
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="class_id" class="form-label">Select Class</label>
+                <select name="class_id" id="class_id" class="form-select" required>
+                    <option value="">Choose a class…</option>
+                    {% for cg in available_classes %}
+                    <option value="{{ cg.pk }}">{{ cg.name }}{% if cg.year_group %} (Year {{ cg.year_group }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label for="end_date" class="form-label">Cover Until <small class="text-muted">(leave blank for today only)</small></label>
+                <input type="date" name="end_date" id="end_date" class="form-control">
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-shield-plus me-1"></i>Start Cover
+            </button>
+        </form>
+    </div>
+</div>
+{% else %}
+{% if not active_covers %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-building" style="font-size: 2rem;"></i>
+    <p class="mt-2">No classes available to cover.</p>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

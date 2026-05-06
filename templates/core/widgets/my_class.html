@@ -1,0 +1,66 @@
+<!-- My Class - student list -->
+<div class="d-flex align-items-center justify-content-between mb-2">
+    <span>
+        {% if active_class %}
+            {{ active_class.name }}
+            {% if not my_class %}
+                <span class="badge bg-warning text-dark ms-1">Covering</span>
+            {% endif %}
+        {% else %}
+            No Class Assigned
+        {% endif %}
+    </span>
+    {% if my_class and covered_classes %}
+    <span class="badge bg-warning text-dark">
+        Also covering: {{ covered_classes|join:", " }}
+    </span>
+    {% endif %}
+</div>
+
+{% if students %}
+<div class="list-group list-group-flush">
+    {% for student in students %}
+    <div class="list-group-item px-0 py-2">
+        <div class="d-flex align-items-center">
+            <a href="{% url 'assessments:student_subjects' student.pk %}"
+               class="d-flex align-items-center flex-grow-1 text-decoration-none text-body">
+                <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3 flex-shrink-0"
+                     style="width:36px; height:36px; font-size:0.85rem;">
+                    {{ student.first_name.0 }}{{ student.last_name.0 }}
+                </div>
+                <div>
+                    <strong>{{ student.full_name }}</strong>
+                    <br>
+                    <small class="text-muted">
+                        {{ student.get_pathway_display }} &middot; Phase {{ student.phase }}
+                        {% if student.year_group %}&middot; Y{{ student.year_group }}{% endif %}
+                    </small>
+                </div>
+            </a>
+            <a href="{% url 'students:learning_journey' student.pk %}"
+               class="btn btn-sm btn-outline-secondary me-2"
+               title="Learning Journey">
+                <i class="bi bi-journal-text"></i>
+            </a>
+            <a href="{% url 'assessments:student_subjects' student.pk %}"
+               class="text-muted">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% elif active_class %}
+<div class="text-center py-4 text-muted">
+    <i class="bi bi-people" style="font-size: 2.5rem;"></i>
+    <p class="mt-2 mb-0">No active students in this class.</p>
+</div>
+{% else %}
+<div class="text-center py-4 text-muted">
+    <i class="bi bi-info-circle" style="font-size: 2.5rem;"></i>
+    <p class="mt-2">You don't have a class assigned yet.</p>
+    <a href="{% url 'staff:cover_class' %}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-arrow-left-right me-1"></i>Cover a class
+    </a>
+</div>
+{% endif %}

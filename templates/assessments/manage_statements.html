@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Manage Statements — AssessApp{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item active">Manage Statements</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0">Assessment Statements</h5>
+    <div class="d-flex gap-2">
+        <a href="{% url 'assessments:create_framework' %}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-circle me-1"></i>New Framework
+        </a>
+        <a href="{% url 'assessments:import_statements' %}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-upload me-1"></i>Import CSV
+        </a>
+    </div>
+</div>
+
+{% for framework in frameworks %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+            <h6 class="mb-0"><i class="bi bi-diagram-3 me-1"></i>{{ framework.name }}</h6>
+            {% if framework.description %}
+            <small class="text-muted">{{ framework.description }}</small>
+            {% endif %}
+        </div>
+        <div class="d-flex gap-1">
+            <a href="{% url 'assessments:create_area' framework.pk %}" class="btn btn-sm btn-outline-primary" title="Add area">
+                <i class="bi bi-plus"></i> Area
+            </a>
+            <a href="{% url 'assessments:edit_framework' framework.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit framework">
+                <i class="bi bi-pencil"></i>
+            </a>
+            <form method="post" action="{% url 'assessments:delete_framework' framework.pk %}" class="d-inline"
+                  onsubmit="return confirm('Delete &quot;{{ framework.name }}&quot; and ALL its areas and statements? This cannot be undone.')">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete framework">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+    <ul class="list-group list-group-flush">
+        {% for area in framework.areas.all %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+                <strong>{{ area.name }}</strong>
+                <br>
+                <small class="text-muted">{{ area.subject.name }}
+                    {% if area.year_group %}· Year {{ area.year_group }}{% endif %}
+                    {% if area.phase %}· Phase {{ area.phase }}{% endif %}
+                </small>
+            </div>
+            <div class="d-flex gap-1 align-items-center">
+                <a href="{% url 'assessments:edit_area_statements' area.pk %}" class="btn btn-sm btn-outline-secondary">
+                    {{ area.statements.count }} statement{{ area.statements.count|pluralize }}
+                    <i class="bi bi-chevron-right ms-1"></i>
+                </a>
+                <a href="{% url 'assessments:edit_area' area.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit area">
+                    <i class="bi bi-pencil"></i>
+                </a>
+                <form method="post" action="{% url 'assessments:delete_area' area.pk %}" class="d-inline"
+                      onsubmit="return confirm('Delete &quot;{{ area.name }}&quot; and all its statements?')">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete area">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </form>
+            </div>
+        </li>
+        {% empty %}
+        <li class="list-group-item text-muted">
+            No areas yet.
+            <a href="{% url 'assessments:create_area' framework.pk %}">Add the first area</a>.
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% empty %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+    <p class="mt-2">No assessment frameworks configured yet.</p>
+    <div class="d-flex justify-content-center gap-2">
+        <a href="{% url 'assessments:create_framework' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-1"></i>Create Framework
+        </a>
+        <a href="{% url 'assessments:import_statements' %}" class="btn btn-outline-primary">
+            <i class="bi bi-upload me-1"></i>Import CSV
+        </a>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

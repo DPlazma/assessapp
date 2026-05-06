@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}Link Evidence to Students{% endblock %}
+
+{% block extra_css %}
+<style>
+    .student-checkbox-card {
+        border: 2px solid #dee2e6;
+        border-radius: 10px;
+        padding: 0.6rem 0.8rem;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+        user-select: none;
+    }
+    .student-checkbox-card:hover { background: #f8f9fa; }
+    .student-checkbox-card.selected {
+        border-color: #0d6efd;
+        background: #e7f1ff;
+    }
+    .ehcp-target-row {
+        display: none;
+        animation: fadeIn 0.2s ease;
+    }
+    .ehcp-target-row.visible { display: block; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    /* Thumbnail preview */
+    .evidence-preview {
+        max-height: 200px;
+        border-radius: 8px;
+        object-fit: cover;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+
+        <!-- Step indicator -->
+        <div class="d-flex align-items-center mb-3">
+            <span class="badge bg-success me-2">1</span>
+            <span class="text-muted text-decoration-line-through me-3">Capture</span>
+            <span class="badge bg-primary me-2">2</span>
+            <span class="fw-semibold me-3">Link to Students</span>
+        </div>
+
+        <div class="row">
+            <!-- Preview column -->
+            <div class="col-md-3 mb-3">
+                {% if item.thumbnail %}
+                <img src="{{ item.thumbnail.url }}" class="evidence-preview w-100" alt="Preview">
+                {% elif item.is_video %}
+                <div class="bg-dark rounded d-flex align-items-center justify-content-center" style="height: 150px;">
+                    <i class="bi bi-play-circle-fill text-white" style="font-size: 2.5rem;"></i>
+                </div>
+                {% endif %}
+                <p class="small text-muted mt-2 mb-0">{{ item.title|truncatechars:40 }}</p>
+                <span class="badge bg-secondary">{{ item.get_evidence_type_display }}</span>
+            </div>
+
+            <!-- Form column -->
+            <div class="col-md-9">
+                <form method="post" id="link-form">
+                    {% csrf_token %}
+
+                    <!-- Subject selection -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Subject</label>
+                        <select class="form-select" name="subject">
+                            <option value="">— None —</option>
+                            {% for s in subjects %}
+                            <option value="{{ s.pk }}" {% if existing_subject == s.pk %}selected{% endif %}>
+                                {{ s.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Student selection -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">
+                            Select Students <small class="text-muted fw-normal">(tap to select/deselect)</small>
+                        </label>
+                        <input type="text" class="form-control form-control-sm mb-2" id="student-search"
+                               placeholder="Search students...">
+                        <div class="row g-2" id="student-grid">
+                            {% if has_priority_class and my_students %}
+                            <div class="col-12">
+                                <h6 class="text-primary mb-1 mt-1"><i class="bi bi-star-fill me-1"></i>My Class</h6>
+                            </div>
+                            {% for s in my_students %}
+                            <div class="col-6 col-md-4 col-lg-3 student-item"
+                                 data-name="{{ s.full_name|lower }}">
+                                <label class="student-checkbox-card d-flex align-items-center w-100
+                                              {% if s.pk in existing_links %}selected{% endif %}"
+                                       data-student-id="{{ s.pk }}">
+                                    <input type="checkbox" name="students" value="{{ s.pk }}"
+                                           class="form-check-input me-2 student-cb"
+                                           {% if s.pk in existing_links %}checked{% endif %}>
+                                    <div>
+                                        <div class="fw-semibold small">{{ s.full_name }}</div>
+                                        <div class="text-muted" style="font-size: 0.7rem;">
+                                            {{ s.get_pathway_display }} &middot; {{ s.class_group.name|default:"—" }}
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                            {% endfor %}
+                            {% if other_students %}
+                            <div class="col-12 mt-2">
+                                <h6 class="text-muted mb-1"><i class="bi bi-people me-1"></i>Other Students</h6>
+                            </div>
+                            {% endif %}
+                            {% for s in other_students %}
+                            <div class="col-6 col-md-4 col-lg-3 student-item"
+                                 data-name="{{ s.full_name|lower }}">
+                                <label class="student-checkbox-card d-flex align-items-center w-100
+                                              {% if s.pk in existing_links %}selected{% endif %}"
+                                       data-student-id="{{ s.pk }}">
+                                    <input type="checkbox" name="students" value="{{ s.pk }}"
+                                           class="form-check-input me-2 student-cb"
+                                           {% if s.pk in existing_links %}checked{% endif %}>
+                                    <div>
+                                        <div class="fw-semibold small">{{ s.full_name }}</div>
+                                        <div class="text-muted" style="font-size: 0.7rem;">
+                                            {{ s.get_pathway_display }} &middot; {{ s.class_group.name|default:"—" }}
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                            {% endfor %}
+                            {% else %}
+                            {% for s in all_students %}
+                            <div class="col-6 col-md-4 col-lg-3 student-item"
+                                 data-name="{{ s.full_name|lower }}">
+                                <label class="student-checkbox-card d-flex align-items-center w-100
+                                              {% if s.pk in existing_links %}selected{% endif %}"
+                                       data-student-id="{{ s.pk }}">
+                                    <input type="checkbox" name="students" value="{{ s.pk }}"
+                                           class="form-check-input me-2 student-cb"
+                                           {% if s.pk in existing_links %}checked{% endif %}>
+                                    <div>
+                                        <div class="fw-semibold small">{{ s.full_name }}</div>
+                                        <div class="text-muted" style="font-size: 0.7rem;">
+                                            {{ s.get_pathway_display }} &middot; {{ s.class_group.name|default:"—" }}
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                            {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- EHCP targets per student (shown dynamically) -->
+                    <div id="ehcp-targets-section" class="mb-3">
+                        <label class="form-label fw-semibold">EHCP Targets <small class="text-muted fw-normal">(per student)</small></label>
+                        <div id="ehcp-targets-container"></div>
+                        <p class="text-muted small" id="ehcp-no-students">
+                            Select students above to see their EHCP targets.
+                        </p>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary fw-semibold">
+                            <i class="bi bi-link-45deg me-1"></i>Link Evidence
+                        </button>
+                        <a href="{% url 'evidence:evidence_detail' item.pk %}" class="btn btn-outline-secondary">
+                            Skip for Now
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const container = document.getElementById('ehcp-targets-container');
+    const noStudentsMsg = document.getElementById('ehcp-no-students');
+    const searchInput = document.getElementById('student-search');
+    const studentItems = document.querySelectorAll('.student-item');
+    const targetCache = {};  // cache fetched targets per student ID
+
+    // Toggle card visual state
+    document.querySelectorAll('.student-checkbox-card').forEach(card => {
+        card.addEventListener('click', function(e) {
+            // Don't double-trigger from the checkbox itself
+            if (e.target.tagName === 'INPUT') return;
+            const cb = this.querySelector('.student-cb');
+            cb.checked = !cb.checked;
+            cb.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    });
+
+    // Handle checkbox change → update card + EHCP targets
+    document.querySelectorAll('.student-cb').forEach(cb => {
+        cb.addEventListener('change', function() {
+            const card = this.closest('.student-checkbox-card');
+            const studentId = card.dataset.studentId;
+
+            if (this.checked) {
+                card.classList.add('selected');
+                addEhcpTargetRow(studentId, card.querySelector('.fw-semibold').textContent.trim());
+            } else {
+                card.classList.remove('selected');
+                removeEhcpTargetRow(studentId);
+            }
+            updateNoStudentsMsg();
+        });
+    });
+
+    function addEhcpTargetRow(studentId, studentName) {
+        // Check if already exists
+        if (document.getElementById('ehcp-row-' + studentId)) return;
+
+        const row = document.createElement('div');
+        row.id = 'ehcp-row-' + studentId;
+        row.className = 'ehcp-target-row visible d-flex align-items-center gap-2 mb-2';
+        row.innerHTML = `
+            <span class="badge bg-primary">${studentName}</span>
+            <select name="ehcp_target_${studentId}" class="form-select form-select-sm" style="max-width: 400px;">
+                <option value="">Loading...</option>
+            </select>
+        `;
+        container.appendChild(row);
+
+        // Fetch targets for this student
+        if (targetCache[studentId]) {
+            row.querySelector('select').innerHTML = targetCache[studentId];
+        } else {
+            fetch(`/evidence/api/student/${studentId}/ehcp-targets/`)
+                .then(r => r.text())
+                .then(html => {
+                    targetCache[studentId] = html;
+                    const sel = document.getElementById('ehcp-row-' + studentId);
+                    if (sel) sel.querySelector('select').innerHTML = html;
+                });
+        }
+    }
+
+    function removeEhcpTargetRow(studentId) {
+        const row = document.getElementById('ehcp-row-' + studentId);
+        if (row) row.remove();
+    }
+
+    function updateNoStudentsMsg() {
+        const hasSelected = document.querySelectorAll('.student-cb:checked').length > 0;
+        noStudentsMsg.style.display = hasSelected ? 'none' : 'block';
+    }
+
+    // Student search filter
+    searchInput.addEventListener('input', function() {
+        const q = this.value.toLowerCase().trim();
+        studentItems.forEach(item => {
+            const name = item.dataset.name;
+            item.style.display = (!q || name.includes(q)) ? '' : 'none';
+        });
+    });
+
+    // Initialize existing selections
+    document.querySelectorAll('.student-cb:checked').forEach(cb => {
+        const card = cb.closest('.student-checkbox-card');
+        addEhcpTargetRow(card.dataset.studentId, card.querySelector('.fw-semibold').textContent.trim());
+    });
+    updateNoStudentsMsg();
+})();
+</script>
+{% endblock %}

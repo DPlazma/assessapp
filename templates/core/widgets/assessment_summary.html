@@ -1,0 +1,66 @@
+<!-- Assessment Summary - RAG breakdown -->
+{% with rag=widget.extra_context.rag_counts pcts=widget.extra_context.rag_pcts %}
+{% if rag.SEC or rag.DEV or rag.EME or rag.NYA %}
+<div class="mb-3">
+    <!-- Stacked bar -->
+    <div class="d-flex rounded overflow-hidden" style="height: 28px;">
+        {% if pcts.SEC %}
+        <div class="bg-success d-flex align-items-center justify-content-center text-white small fw-bold"
+             style="width: {{ pcts.SEC }}%;" title="Secure: {{ rag.SEC }}">
+            {% if pcts.SEC > 8 %}{{ pcts.SEC }}%{% endif %}
+        </div>
+        {% endif %}
+        {% if pcts.DEV %}
+        <div style="width: {{ pcts.DEV }}%; background-color: var(--rag-developing);"
+             class="d-flex align-items-center justify-content-center text-white small fw-bold"
+             title="Developing: {{ rag.DEV }}">
+            {% if pcts.DEV > 8 %}{{ pcts.DEV }}%{% endif %}
+        </div>
+        {% endif %}
+        {% if pcts.EME %}
+        <div class="bg-danger d-flex align-items-center justify-content-center text-white small fw-bold"
+             style="width: {{ pcts.EME }}%;" title="Emerging: {{ rag.EME }}">
+            {% if pcts.EME > 8 %}{{ pcts.EME }}%{% endif %}
+        </div>
+        {% endif %}
+        {% if pcts.NYA %}
+        <div class="bg-secondary d-flex align-items-center justify-content-center text-white small fw-bold"
+             style="width: {{ pcts.NYA }}%;" title="Not Yet Assessed: {{ rag.NYA }}">
+            {% if pcts.NYA > 8 %}{{ pcts.NYA }}%{% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Legend -->
+<div class="row g-2 small">
+    <div class="col-6">
+        <span class="badge status-SEC me-1">S</span>
+        Secure <strong>{{ rag.SEC }}</strong>
+    </div>
+    <div class="col-6">
+        <span class="badge status-DEV me-1">D</span>
+        Developing <strong>{{ rag.DEV }}</strong>
+    </div>
+    <div class="col-6">
+        <span class="badge status-EME me-1">E</span>
+        Emerging <strong>{{ rag.EME }}</strong>
+    </div>
+    <div class="col-6">
+        <span class="badge status-NYA me-1">N</span>
+        Not Assessed <strong>{{ rag.NYA }}</strong>
+    </div>
+</div>
+
+<div class="text-end mt-2">
+    <a href="{% url 'reports:index' %}" class="small text-decoration-none">
+        View reports <i class="bi bi-arrow-right"></i>
+    </a>
+</div>
+{% else %}
+<div class="text-center text-muted py-3">
+    <i class="bi bi-pie-chart" style="font-size: 2rem;"></i>
+    <p class="small mb-0 mt-2">No assessment data yet.</p>
+</div>
+{% endif %}
+{% endwith %}

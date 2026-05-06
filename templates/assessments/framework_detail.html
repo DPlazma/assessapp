@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+{% block title %}{{ framework.name }} — AssessApp{% endblock %}
+
+{% block content %}
+{# ── Header ── #}
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+        <h4 class="mb-0">
+            <a href="{% url 'assessments:framework_hub' %}" class="text-decoration-none text-muted">
+                <i class="bi bi-arrow-left me-2"></i>
+            </a>
+            <i class="bi bi-diagram-3 text-primary me-1"></i>{{ framework.name }}
+        </h4>
+        {% if framework.description %}
+        <small class="text-muted">{{ framework.description }}</small>
+        {% endif %}
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        {% if not is_mapp %}
+        <a href="{% url 'assessments:create_area' framework.pk %}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>Add Area
+        </a>
+        {% endif %}
+        <a href="{% url 'assessments:edit_framework' framework.pk %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-pencil me-1"></i>Edit
+        </a>
+        <form method="post" action="{% url 'assessments:delete_framework' framework.pk %}" class="d-inline"
+              onsubmit="return confirm('Delete &quot;{{ framework.name }}&quot; and ALL its areas, statements, and assignments? This cannot be undone.');">
+            {% csrf_token %}
+            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>Delete</button>
+        </form>
+    </div>
+</div>
+
+{# ── Stats Row ── #}
+<div class="row g-3 mb-4">
+    {% if is_mapp %}
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-0 shadow-sm py-2">
+            <div class="card-body py-2">
+                <div class="fs-4 fw-bold text-primary">{{ mapp_dimensions|length }}</div>
+                <small class="text-muted">Dimension{{ mapp_dimensions|length|pluralize }}</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-0 shadow-sm py-2">
+            <div class="card-body py-2">
+                <div class="fs-4 fw-bold text-primary">{{ mapp_config.scale_min }}–{{ mapp_config.scale_max }}</div>
+                <small class="text-muted">Scale Range</small>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-0 shadow-sm py-2">
+            <div class="card-body py-2">
+                <div class="fs-4 fw-bold text-primary">{{ areas|length }}</div>
+                <small class="text-muted">Area{{ areas|length|pluralize }}</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-0 shadow-sm py-2">
+            <div class="card-body py-2">
+                <div class="fs-4 fw-bold text-primary" id="stmt-total">—</div>
+                <small class="text-muted">Statements</small>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-0 shadow-sm py-2">
+            <div class="card-body py-2">
+                <div class="fs-4 fw-bold text-success">{{ class_assignments|length }}</div>
+                <small class="text-muted">Class{{ class_assignments|length|pluralize:"es" }}</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-0 shadow-sm py-2">
+            <div class="card-body py-2">
+                <div class="fs-4 fw-bold text-info">{{ student_assignments|length }}</div>
+                <small class="text-muted">Student{{ student_assignments|length|pluralize }}</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Tabs ── #}
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-builder">
+            <i class="bi bi-bricks me-1"></i>Builder
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-assign">
+            <i class="bi bi-people me-1"></i>Assignments
+            {% with total=class_assignments|length|add:student_assignments|length %}
+            {% if total %}<span class="badge bg-primary ms-1">{{ total }}</span>{% endif %}
+            {% endwith %}
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+
+{# ─────────── BUILDER TAB ─────────── #}
+<div class="tab-pane fade show active" id="tab-builder">
+    {% if is_mapp %}
+    {# ── MAPP Configuration Overview ── #}
+    <div class="card mb-3 border-0 shadow-sm">
+        <div class="card-header bg-white">
+            <h6 class="mb-0"><i class="bi bi-gear me-1"></i>MAPP Configuration — {{ mapp_config.name }}</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:60px">Order</th>
+                            <th style="width:80px">Code</th>
+                            <th>Dimension Name</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for dim in mapp_dimensions %}
+                        <tr>
+                            <td class="text-center">{{ dim.order }}</td>
+                            <td><span class="badge bg-success">{{ dim.code }}</span></td>
+                            <td>{{ dim.name }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-3 d-flex gap-2 flex-wrap align-items-center">
+                <span class="badge bg-primary">Scale: {{ mapp_config.scale_min }}–{{ mapp_config.scale_max }}</span>
+                <a href="{% url 'assessments:mapp_configure' %}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-gear me-1"></i>Configure MAPP
+                </a>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    {# ── Regular Framework Areas ── #}
+    {% for area in areas %}
+    <div class="card mb-3 border-0 shadow-sm">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center"
+             data-bs-toggle="collapse" data-bs-target="#area-{{ area.pk }}" role="button">
+            <div>
+                <h6 class="mb-0">{{ area.name }}</h6>
+                <small class="text-muted">
+                    {{ area.subject.name }}
+                    {% if area.year_group %}&middot; Year {{ area.year_group }}{% endif %}
+                    {% if area.phase %}&middot; Phase {{ area.phase }}{% endif %}
+                    {% if area.sub_areas.count %}&middot; {{ area.sub_areas.count }} level{{ area.sub_areas.count|pluralize }}{% endif %}
+                    &middot; {{ area.statements.count }} statement{{ area.statements.count|pluralize }}
+                </small>
+            </div>
+            <div class="d-flex gap-1">
+                <a href="{% url 'assessments:manage_sub_areas' area.pk %}" class="btn btn-sm btn-outline-info" title="Manage levels">
+                    <i class="bi bi-layers"></i>
+                </a>
+                <a href="{% url 'assessments:edit_area_statements' area.pk %}" class="btn btn-sm btn-outline-primary" title="Edit statements">
+                    <i class="bi bi-pencil-square"></i>
+                </a>
+                <a href="{% url 'assessments:edit_area' area.pk %}" class="btn btn-sm btn-outline-secondary" title="Edit area">
+                    <i class="bi bi-pencil"></i>
+                </a>
+                <form method="post" action="{% url 'assessments:delete_area' area.pk %}" class="d-inline"
+                      onsubmit="return confirm('Delete &quot;{{ area.name }}&quot; and all its statements?');">
+                    {% csrf_token %}
+                    <button class="btn btn-sm btn-outline-danger" title="Delete area"><i class="bi bi-trash"></i></button>
+                </form>
+            </div>
+        </div>
+        <div id="area-{{ area.pk }}" class="collapse">
+            <ul class="list-group list-group-flush">
+                {% if area.sub_areas.count %}
+                    {% for sub_area in area.sub_areas.all %}
+                    <li class="list-group-item py-2 ps-3 bg-light fw-bold">
+                        <i class="bi bi-layers me-1 text-info"></i>{{ sub_area.name }}
+                        <small class="text-muted fw-normal ms-1">({{ sub_area.statements.count }} statement{{ sub_area.statements.count|pluralize }})</small>
+                    </li>
+                    {% for stmt in sub_area.statements.all %}
+                    <li class="list-group-item py-2 ps-5">
+                        <small>{{ forloop.counter }}.</small> {{ stmt.statement_text }}
+                    </li>
+                    {% empty %}
+                    <li class="list-group-item text-muted py-2 ps-5">
+                        No statements in this level yet.
+                    </li>
+                    {% endfor %}
+                    {% endfor %}
+                    {% with ungrouped=area.statements.all %}
+                    {% for stmt in ungrouped %}
+                        {% if not stmt.sub_area %}
+                        <li class="list-group-item py-2 ps-4">
+                            <small>{{ forloop.counter }}.</small> {{ stmt.statement_text }}
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    {% endwith %}
+                {% else %}
+                    {% for stmt in area.statements.all %}
+                    <li class="list-group-item py-2 ps-4">
+                        <small>{{ forloop.counter }}.</small> {{ stmt.statement_text }}
+                    </li>
+                    {% empty %}
+                    <li class="list-group-item text-muted py-2 ps-4">
+                        No statements yet.
+                    </li>
+                    {% endfor %}
+                {% endif %}
+                <li class="list-group-item py-2 bg-light text-center">
+                    <a href="{% url 'assessments:edit_area_statements' area.pk %}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-pencil-square me-1"></i>Edit Statements
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+    {% empty %}
+    <div class="text-center text-muted py-5">
+        <i class="bi bi-bricks" style="font-size: 2rem;"></i>
+        <p class="mt-2">No areas yet. Start building this framework.</p>
+        <a href="{% url 'assessments:create_area' framework.pk %}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>Add First Area
+        </a>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+
+{# ─────────── ASSIGNMENTS TAB ─────────── #}
+<div class="tab-pane fade" id="tab-assign">
+
+    {# ── Assign form ── #}
+    <div class="card mb-3 border-0 shadow-sm">
+        <div class="card-header bg-white">
+            <h6 class="mb-0"><i class="bi bi-plus-circle me-1"></i>Assign Framework</h6>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{% url 'assessments:framework_assign' framework.pk %}">
+                {% csrf_token %}
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Assign to Classes</label>
+                        <div class="border rounded p-2" style="max-height:200px;overflow-y:auto">
+                            <div class="form-check mb-1">
+                                <input class="form-check-input" type="checkbox" id="toggle-all-classes"
+                                       onchange="document.querySelectorAll('.class-cb').forEach(c=>c.checked=this.checked)">
+                                <label class="form-check-label fw-semibold" for="toggle-all-classes">Select All</label>
+                            </div>
+                            <hr class="my-1">
+                            {% for cg in class_groups %}
+                            {% if cg.pk not in assigned_class_ids %}
+                            <div class="form-check mb-1">
+                                <input class="form-check-input class-cb" type="checkbox" name="class_ids" value="{{ cg.pk }}" id="cls-{{ cg.pk }}">
+                                <label class="form-check-label" for="cls-{{ cg.pk }}">{{ cg.name }}{% if cg.year_group %} <small class="text-muted">(Y{{ cg.year_group }})</small>{% endif %}</label>
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Assign to Individual Students</label>
+                        <div class="border rounded p-2" style="max-height:200px;overflow-y:auto">
+                            <div class="form-check mb-1">
+                                <input class="form-check-input" type="checkbox" id="toggle-all-students"
+                                       onchange="document.querySelectorAll('.student-cb').forEach(c=>c.checked=this.checked)">
+                                <label class="form-check-label fw-semibold" for="toggle-all-students">Select All</label>
+                            </div>
+                            <hr class="my-1">
+                            {% for st in students %}
+                            {% if st.pk not in assigned_student_ids %}
+                            <div class="form-check mb-1">
+                                <input class="form-check-input student-cb" type="checkbox" name="student_ids" value="{{ st.pk }}" id="stu-{{ st.pk }}">
+                                <label class="form-check-label" for="stu-{{ st.pk }}">{{ st.full_name }}{% if st.class_group %} <small class="text-muted">— {{ st.class_group.name }}</small>{% endif %}</label>
+                            </div>
+                            {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-primary btn-sm">
+                    <i class="bi bi-check-lg me-1"></i>Assign
+                </button>
+            </form>
+        </div>
+    </div>
+
+    {# ── Current class assignments ── #}
+    <div class="card mb-3 border-0 shadow-sm">
+        <div class="card-header bg-white">
+            <h6 class="mb-0"><i class="bi bi-people me-1"></i>Assigned Classes</h6>
+        </div>
+        {% if class_assignments %}
+        <ul class="list-group list-group-flush">
+            {% for a in class_assignments %}
+            <li class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>{{ a.class_group.name }}</strong>
+                        {% if a.class_group.year_group %}<small class="text-muted ms-1">Year {{ a.class_group.year_group }}</small>{% endif %}
+                        <br>
+                        <small class="text-muted">{{ a.class_group.students.count }} student{{ a.class_group.students.count|pluralize }} &middot; Assigned {{ a.created_at|date:"d-m-Y" }}</small>
+                    </div>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-secondary" type="button"
+                                data-bs-toggle="collapse" data-bs-target="#class-students-{{ a.pk }}"
+                                title="Personalise students">
+                            <i class="bi bi-person-gear me-1"></i>Personalise
+                        </button>
+                        <form method="post" action="{% url 'assessments:framework_unassign' a.pk %}"
+                              onsubmit="return confirm('Remove {{ a.class_group.name }} from this framework?');">
+                            {% csrf_token %}
+                            <button class="btn btn-sm btn-outline-danger" title="Remove"><i class="bi bi-x-lg"></i></button>
+                        </form>
+                    </div>
+                </div>
+                <div class="collapse mt-2" id="class-students-{{ a.pk }}">
+                    <div class="list-group list-group-flush ms-3">
+                        {% for st in a.class_group.students.all %}
+                        {% if st.is_active %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center py-1 px-2">
+                            <small>{{ st.full_name }}</small>
+                            <a href="{% url 'assessments:personalise_framework' framework.pk st.pk %}"
+                               class="btn btn-sm btn-outline-primary py-0" title="Personalise statements">
+                                <i class="bi bi-sliders2 me-1"></i>Select Statements
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="card-body text-muted text-center py-3">No classes assigned.</div>
+        {% endif %}
+    </div>
+
+    {# ── Current student assignments ── #}
+    <div class="card mb-3 border-0 shadow-sm">
+        <div class="card-header bg-white">
+            <h6 class="mb-0"><i class="bi bi-person me-1"></i>Assigned Students (Individual)</h6>
+        </div>
+        {% if student_assignments %}
+        <ul class="list-group list-group-flush">
+            {% for a in student_assignments %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>{{ a.student.full_name }}</strong>
+                    {% if a.student.class_group %}<small class="text-muted ms-1">{{ a.student.class_group.name }}</small>{% endif %}
+                    <br>
+                    <small class="text-muted">{{ a.student.get_pathway_display }} · Phase {{ a.student.phase }} &middot; Assigned {{ a.created_at|date:"d-m-Y" }}</small>
+                </div>
+                <div class="d-flex gap-1">
+                    <a href="{% url 'assessments:personalise_framework' framework.pk a.student.pk %}"
+                       class="btn btn-sm btn-outline-primary" title="Personalise statements">
+                        <i class="bi bi-sliders2 me-1"></i>Personalise
+                    </a>
+                    <form method="post" action="{% url 'assessments:framework_unassign' a.pk %}"
+                          onsubmit="return confirm('Remove {{ a.student.full_name }} from this framework?');">
+                        {% csrf_token %}
+                        <button class="btn btn-sm btn-outline-danger" title="Remove"><i class="bi bi-x-lg"></i></button>
+                    </form>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="card-body text-muted text-center py-3">No individual students assigned.</div>
+        {% endif %}
+    </div>
+</div>
+
+</div>{# /tab-content #}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Calculate total statements (non-MAPP frameworks only)
+document.addEventListener('DOMContentLoaded', function() {
+    const el = document.getElementById('stmt-total');
+    if (!el) return; // MAPP uses different stats
+    let total = 0;
+    document.querySelectorAll('#tab-builder .card-header small.text-muted').forEach(hdr => {
+        const m = hdr.textContent.match(/(\d+)\s+statement/);
+        if (m) total += parseInt(m[1]);
+    });
+    el.textContent = total;
+});
+</script>
+{% endblock %}

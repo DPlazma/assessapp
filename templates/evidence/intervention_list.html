@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Interventions — {{ student.full_name }}{% endblock %}
+
+{% block content %}
+{% include "students/_student_nav.html" with student_nav="interventions" %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h5 class="mb-0">
+        <i class="bi bi-clipboard2-pulse text-primary me-2"></i>Interventions
+        <small class="text-muted ms-2">{{ active_count }} active of {{ total_count }}</small>
+    </h5>
+    <div class="d-flex gap-1">
+        <a href="{% url 'evidence:intervention_enrol' student.pk %}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>New Intervention
+        </a>
+    </div>
+</div>
+
+<!-- Status filter -->
+<div class="d-flex gap-2 mb-3 flex-wrap">
+    <a href="{% url 'evidence:intervention_list' student.pk %}"
+       class="btn btn-sm {% if not status_filter %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        All
+    </a>
+    {% for code, label in status_choices %}
+    <a href="{% url 'evidence:intervention_list' student.pk %}?status={{ code }}"
+       class="btn btn-sm {% if status_filter == code %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        {{ label }}
+    </a>
+    {% endfor %}
+</div>
+
+{% for e in enrolments %}
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start">
+            <div class="flex-grow-1">
+                <a href="{% url 'evidence:intervention_detail' e.pk %}" class="fw-semibold text-decoration-none">
+                    {{ e.program.name }}
+                </a>
+                <div class="mt-1">
+                    <span class="badge
+                        {% if e.status == 'ACTIVE' %}bg-success
+                        {% elif e.status == 'COMPLETED' %}bg-primary
+                        {% elif e.status == 'PAUSED' %}bg-warning text-dark
+                        {% else %}bg-secondary{% endif %}">
+                        {{ e.get_status_display }}
+                    </span>
+                    {% if e.program.category %}
+                    <span class="badge bg-light text-dark border">{{ e.program.get_category_display }}</span>
+                    {% endif %}
+                    {% if e.frequency %}
+                    <span class="badge bg-light text-dark border">{{ e.frequency }}</span>
+                    {% endif %}
+                </div>
+                {% if e.delivered_by %}
+                <small class="text-muted d-block mt-1">
+                    <i class="bi bi-person me-1"></i>{{ e.delivered_by.get_full_name|default:e.delivered_by.username }}
+                </small>
+                {% endif %}
+                {% if e.ehcp_target %}
+                <small class="text-muted d-block">
+                    <i class="bi bi-bullseye me-1"></i>{{ e.ehcp_target.title|truncatechars:60 }}
+                </small>
+                {% endif %}
+                <small class="text-muted d-block mt-1">
+                    {{ e.start_date }}{% if e.end_date %} — {{ e.end_date }}{% endif %}
+                    &middot; {{ e.session_count }} sessions ({{ e.attendance_pct }}% attendance)
+                </small>
+            </div>
+            <a href="{% url 'evidence:intervention_detail' e.pk %}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-eye"></i>
+            </a>
+        </div>
+    </div>
+</div>
+{% empty %}
+<div class="text-center py-5 text-muted">
+    <i class="bi bi-clipboard2-pulse" style="font-size: 3rem;"></i>
+    <p class="mt-2">No interventions recorded yet.</p>
+    <a href="{% url 'evidence:intervention_enrol' student.pk %}" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>Add First Intervention
+    </a>
+</div>
+{% endfor %}
+{% endblock %}

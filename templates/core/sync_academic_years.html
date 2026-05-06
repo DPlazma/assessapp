@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Sync Academic Years from Arbor — AssessApp{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'core:academic_year_setup' %}" class="text-decoration-none">
+        <i class="bi bi-arrow-left me-1"></i>Back to Academic Year Setup
+    </a>
+</div>
+
+<h4 class="mb-3"><i class="bi bi-cloud-download me-2"></i>Sync Academic Years from Arbor</h4>
+
+{% if preview %}
+<form method="post">
+    {% csrf_token %}
+    <p class="text-muted mb-3">
+        Select the academic years you want to import or update from Arbor.
+        Existing years with the same name will have their dates updated.
+    </p>
+
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th style="width:40px;">
+                        <input type="checkbox" id="select-all" class="form-check-input"
+                               onchange="document.querySelectorAll('.year-check').forEach(c=>c.checked=this.checked)">
+                    </th>
+                    <th>Academic Year</th>
+                    <th>Start Date</th>
+                    <th>End Date</th>
+                    <th>Terms (from Arbor)</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ay in preview %}
+                <tr>
+                    <td>
+                        <input type="checkbox" name="year_ids" value="{{ ay.arbor_id }}"
+                               class="form-check-input year-check" checked>
+                    </td>
+                    <td><strong>{{ ay.name }}</strong></td>
+                    <td>{{ ay.start_date }}</td>
+                    <td>{{ ay.end_date }}</td>
+                    <td>
+                        {% if ay.periods %}
+                            {% for p in ay.periods %}
+                            <span class="badge bg-light text-dark border me-1" title="{{ p.start }} → {{ p.end }}">
+                                {{ p.name }}
+                            </span>
+                            {% endfor %}
+                        {% else %}
+                            <span class="text-muted">No terms found</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if ay.exists %}
+                            <span class="badge bg-info">Will update</span>
+                        {% else %}
+                            <span class="badge bg-success">New</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-cloud-download me-1"></i>Sync Selected Years
+        </button>
+        <a href="{% url 'core:academic_year_setup' %}" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+{% else %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle me-1"></i>No academic years found in Arbor.
+    Check your Arbor connection settings.
+</div>
+<a href="{% url 'core:academic_year_setup' %}" class="btn btn-outline-secondary">Back</a>
+{% endif %}
+{% endblock %}

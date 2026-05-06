@@ -1,0 +1,51 @@
+{% extends "pdf/base_pdf.html" %}
+{% block title %}School Progress{% endblock %}
+
+{% block extra_css %}
+td.badge-cell { text-align: center; font-weight: 600; font-size: 9pt; padding: 1mm 2mm; }
+td.sec-cell { color: #198754; }
+td.dev-cell { color: #fd7e14; }
+td.eme-cell { color: #dc3545; }
+td.nya-cell { color: #6c757d; }
+.bar-wrap { height: 4mm; border-radius: 2mm; overflow: hidden; display: flex; min-width: 30mm; }
+.bar-sec { background-color: #198754; }
+.bar-dev { background-color: #fd7e14; }
+.bar-eme { background-color: #dc3545; }
+.bar-nya { background-color: #6c757d; }
+{% endblock %}
+
+{% block content %}
+<h1>Whole School Progress</h1>
+<p class="meta">{{ period_label }} · {{ rows|length }} classes · Generated {{ today|date:"d-m-Y" }}</p>
+
+{% if rows %}
+<table>
+    <thead>
+        <tr>
+            <th>Class</th>
+            <th class="num">Students</th>
+            <th class="num">NYA</th>
+            <th class="num">Emerging</th>
+            <th class="num">Developing</th>
+            <th class="num">Secure</th>
+            <th class="num">% Secure</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            <td style="white-space:nowrap;font-weight:600;">{{ row.name }}</td>
+            <td class="num">{{ row.students }}</td>
+            <td class="badge-cell nya-cell">{{ row.nya }}</td>
+            <td class="badge-cell eme-cell">{{ row.eme }}</td>
+            <td class="badge-cell dev-cell">{{ row.dev }}</td>
+            <td class="badge-cell sec-cell">{{ row.sec }}</td>
+            <td class="num" style="font-weight:700;">{{ row.pct_sec }}%</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No data to display for the selected filters.</p>
+{% endif %}
+{% endblock %}

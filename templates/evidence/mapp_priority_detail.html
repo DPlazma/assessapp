@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}MAPP — {{ priority.title|truncatechars:40 }}{% endblock %}
+
+{% block content %}
+{% include "students/_student_nav.html" with student_nav="assess" %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <h5 class="mb-0">
+            <i class="bi bi-grid-3x3 text-primary me-2"></i>MAPP Grid
+        </h5>
+        <small class="text-muted">
+            {{ priority.title }}
+            {% if priority.ehcp_target and priority.ehcp_target.outcome %}
+            &middot; {{ priority.ehcp_target.outcome.name }}
+            {% endif %}
+        </small>
+    </div>
+    <div class="d-flex gap-1">
+        <form method="post" action="{% url 'evidence:mapp_priority_delete' priority.pk %}"
+              onsubmit="return confirm('Delete this learning priority?')">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger btn-sm">
+                <i class="bi bi-trash me-1"></i>Delete
+            </button>
+        </form>
+    </div>
+</div>
+
+{% if priority.ehcp_target %}
+<div class="alert alert-light border mb-3">
+    <strong>EHCP Outcome:</strong> {{ priority.ehcp_target.title }}
+</div>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header bg-white">
+        <h6 class="mb-0">{{ priority.title }}</h6>
+        <small class="text-muted">
+            {% if priority.academic_year %}{{ priority.academic_year }}{% endif %}
+            {% if priority.term %} &middot; {{ priority.term }}{% endif %}
+            {% if priority.ehcp_year %} &middot; EHCP Year: {{ priority.ehcp_year }}{% endif %}
+        </small>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+
+            <!-- CSD Grid -->
+            <div class="table-responsive mb-3">
+                <table class="table table-bordered text-center mb-0" style="table-layout: fixed;">
+                    <thead>
+                        <tr class="table-light">
+                            <th style="width: 130px;">Dimension</th>
+                            {% for csd in csd_range %}
+                            <th>{{ csd }}</th>
+                            {% endfor %}
+                            <th style="width: 60px;">Score</th>
+                            <th style="width: 60px;">%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in grid %}
+                        <tr>
+                            <td class="text-start fw-semibold small">
+                                {{ row.dim.dimension_label }}
+                            </td>
+                            {% for cell in row.cells %}
+                            <td class="{% if cell.marker == 'b' %}bg-warning bg-opacity-25 fw-bold{% elif cell.marker %}bg-success bg-opacity-25{% endif %}"
+                                style="font-size: 0.85rem;">
+                                {% if cell.marker %}{{ cell.marker }}{% endif %}
+                            </td>
+                            {% endfor %}
+                            <td class="fw-bold">{{ row.final_score }}</td>
+                            <td class="fw-bold text-success">{{ row.pct }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="table-light">
+                            <td class="text-start small fw-semibold">C.S.D. Scale</td>
+                            {% for csd in csd_range %}
+                            <td class="small text-muted">{{ csd }}</td>
+                            {% endfor %}
+                            <td></td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <div class="alert alert-light border small mb-3">
+                <strong>Key:</strong> <code>b</code> = baseline &nbsp;|&nbsp;
+                Numbers = assessment progress steps from baseline &nbsp;|&nbsp;
+                Score = steps from baseline &nbsp;|&nbsp;
+                % = score × 10
+            </div>
+
+            <!-- Score Sliders -->
+            <h6 class="mb-2"><i class="bi bi-sliders me-1"></i>Update Scores</h6>
+            <div class="row g-3 mb-3">
+                {% for row in grid %}
+                <div class="col-md-3 col-6">
+                    <label class="form-label small">
+                        {{ row.dim.dimension_label }}
+                        <span class="text-muted">(baseline: {{ row.dim.baseline_csd }})</span>
+                    </label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">Steps</span>
+                        <input type="number" name="score_{{ row.dim.dimension }}"
+                               class="form-control" min="0" max="{{ row.max_score }}"
+                               value="{{ row.dim.current_score }}">
+                    </div>
+                    <small class="text-muted">Max: {{ row.max_score }} (CSD {{ row.dim.baseline_csd }} → 10)</small>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Metadata -->
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label class="form-label small">Academic Year</label>
+                    <input type="text" name="academic_year" class="form-control form-control-sm"
+                           value="{{ priority.academic_year }}">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">Term</label>
+                    <select name="term" class="form-select form-select-sm">
+                        <option value="">—</option>
+                        <option value="Autumn" {% if priority.term == "Autumn" %}selected{% endif %}>Autumn</option>
+                        <option value="Spring" {% if priority.term == "Spring" %}selected{% endif %}>Spring</option>
+                        <option value="Summer" {% if priority.term == "Summer" %}selected{% endif %}>Summer</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small">Final Assessment Date</label>
+                    <input type="date" name="final_assessment_date" class="form-control form-control-sm"
+                           value="{{ priority.final_assessment_date|date:'Y-m-d'|default:'' }}">
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-sm">
+                <i class="bi bi-check-lg me-1"></i>Save Scores
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

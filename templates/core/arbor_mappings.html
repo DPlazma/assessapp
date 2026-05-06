@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+{% block title %}Arbor Entity Mapping — AssessApp{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'core:arbor_settings' %}" class="text-decoration-none">
+        <i class="bi bi-arrow-left me-1"></i>Back to Arbor Settings
+    </a>
+</div>
+
+<h4 class="mb-4"><i class="bi bi-diagram-3 me-2"></i>Discover &amp; Map Entities</h4>
+
+<p class="text-muted mb-4">
+    Match your AssessApp subjects, statuses and terms to the corresponding Arbor assessments, grades and periods.
+    This tells AssessApp where to push each piece of data.
+</p>
+
+<!-- ── Subject → Assessment ───────────────────────────────── -->
+<div class="card mb-4">
+    <div class="card-header fw-semibold">
+        <i class="bi bi-book me-1"></i>Subject → Assessment
+    </div>
+    <div class="card-body">
+        <p class="text-muted small">Map each AssessApp subject to an Arbor Assessment.</p>
+        <table class="table table-sm align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>AssessApp Subject</th>
+                    <th>Arbor Assessment</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for subject in subjects %}
+                <tr>
+                    <td>{{ subject.name }}</td>
+                    <td>
+                        <select class="form-select form-select-sm mapping-select"
+                                data-entity="assessment" data-local-id="{{ subject.id }}"
+                                data-local-label="{{ subject.name }}">
+                            <option value="">— not mapped —</option>
+                            {% for a in arbor_assessments %}
+                            <option value="{{ a.id }}"
+                                    data-href="/rest-v2/assessments/{{ a.id }}"
+                                    data-label="{{ a.assessmentName }}"
+                                    {% if existing_mappings|default:"" %}
+                                    {% endif %}>
+                                {{ a.assessmentName }}
+                                {% if a.subject %}({{ a.subject.displayName }}){% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ── Grade Set Selection ────────────────────────────────── -->
+<div class="card mb-4">
+    <div class="card-header fw-semibold">
+        <i class="bi bi-bar-chart-steps me-1"></i>Grade Set &amp; Status → Grade
+    </div>
+    <div class="card-body">
+        <p class="text-muted small">
+            Select the Arbor Grade Set that contains your NYA / Emerging / Developing / Secure equivalents,
+            then map each status to a grade within that set.
+        </p>
+
+        <div class="mb-3">
+            <label for="grade-set-select" class="form-label fw-semibold">Arbor Grade Set</label>
+            <select class="form-select" id="grade-set-select">
+                <option value="">— choose a grade set —</option>
+                {% for gs in arbor_grade_sets %}
+                <option value="{{ gs.id }}" data-grades='{{ gs.grades_json }}'>
+                    {{ gs.displayName }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <table class="table table-sm align-middle" id="grade-table">
+            <thead class="table-light">
+                <tr>
+                    <th>AssessApp Status</th>
+                    <th>Arbor Grade</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for code, label in statuses %}
+                <tr>
+                    <td>{{ label }} <span class="badge bg-secondary">{{ code }}</span></td>
+                    <td>
+                        <select class="form-select form-select-sm mapping-select grade-select"
+                                data-entity="grade" data-local-id="{{ code }}"
+                                data-local-label="{{ label }}" disabled>
+                            <option value="">— select grade set first —</option>
+                        </select>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ── Term → Progress Measurement Period ─────────────────── -->
+<div class="card mb-4">
+    <div class="card-header fw-semibold">
+        <i class="bi bi-calendar3 me-1"></i>Term → Progress Measurement Period
+    </div>
+    <div class="card-body">
+        <p class="text-muted small">Map each AssessApp term to an Arbor Progress Measurement Period.</p>
+        <table class="table table-sm align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>AssessApp Term</th>
+                    <th>Arbor Period</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for term in terms %}
+                <tr>
+                    <td>{{ term }} ({{ term.academic_year }})</td>
+                    <td>
+                        <select class="form-select form-select-sm mapping-select"
+                                data-entity="period" data-local-id="{{ term.id }}"
+                                data-local-label="{{ term }}">
+                            <option value="">— not mapped —</option>
+                            {% for p in arbor_periods %}
+                            <option value="{{ p.id }}"
+                                    data-href="/rest-v2/progress-measurement-periods/{{ p.id }}"
+                                    data-label="{{ p.periodName }}">
+                                {{ p.periodName }}
+                                {% if p.academicYear %}({{ p.academicYear.displayName }}){% endif %}
+                                {% if p.startDate %} [{{ p.startDate }} – {{ p.endDate }}]{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ── Save ──────────────────────────────────────────────── -->
+<div class="d-flex gap-2 mb-5">
+    <button type="button" class="btn btn-primary" id="btn-save-mappings">
+        <i class="bi bi-check-circle me-1"></i>Save Mappings
+    </button>
+    <a href="{% url 'core:arbor_settings' %}" class="btn btn-outline-secondary">Cancel</a>
+</div>
+<div id="save-result" class="mb-4" style="display:none;"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    // ── Pre-populate existing mappings ──
+    var existingMappings = {};
+    {% for key, m in existing_mappings.items %}
+    existingMappings["{{ key.0 }}__{{ key.1 }}"] = {
+        arbor_id: "{{ m.arbor_id }}",
+        arbor_label: "{{ m.arbor_label }}",
+        arbor_href: "{{ m.arbor_href }}"
+    };
+    {% endfor %}
+
+    // Set select values from existing mappings
+    document.querySelectorAll('.mapping-select:not(.grade-select)').forEach(function(sel) {
+        var entity = sel.dataset.entity;
+        var localId = sel.dataset.localId;
+        var key = entity + "__" + localId;
+        var existing = existingMappings[key];
+        if (existing && existing.arbor_id) {
+            sel.value = existing.arbor_id;
+        }
+    });
+
+    // ── Grade set picker → populate grade dropdowns ──
+    var gradeSetSelect = document.getElementById('grade-set-select');
+    if (gradeSetSelect) {
+        gradeSetSelect.addEventListener('change', function() {
+            var opt = this.options[this.selectedIndex];
+            var gradesJson = opt.getAttribute('data-grades');
+            var grades = [];
+            try { grades = JSON.parse(gradesJson || '[]'); } catch(e) {}
+
+            document.querySelectorAll('.grade-select').forEach(function(sel) {
+                sel.innerHTML = '<option value="">— not mapped —</option>';
+                grades.forEach(function(g) {
+                    var o = document.createElement('option');
+                    o.value = g.id;
+                    o.textContent = (g.longName || g.shortName) + (g.gradeValue ? ' (' + g.gradeValue + ')' : '');
+                    o.dataset.href = '/rest-v2/grades/' + g.id;
+                    o.dataset.label = g.longName || g.shortName;
+                    sel.appendChild(o);
+                });
+                sel.disabled = false;
+
+                // Restore existing mapping
+                var key = 'grade__' + sel.dataset.localId;
+                var existing = existingMappings[key];
+                if (existing && existing.arbor_id) {
+                    sel.value = existing.arbor_id;
+                }
+            });
+        });
+
+        // Check if a grade_set mapping exists to auto-select
+        var gsKey = "grade_set__default";
+        if (existingMappings[gsKey] && existingMappings[gsKey].arbor_id) {
+            gradeSetSelect.value = existingMappings[gsKey].arbor_id;
+            gradeSetSelect.dispatchEvent(new Event('change'));
+        }
+    }
+
+    // ── Save mappings ──
+    document.getElementById('btn-save-mappings')?.addEventListener('click', function() {
+        var btn = this;
+        var result = document.getElementById('save-result');
+
+        var mappings = [];
+        document.querySelectorAll('.mapping-select').forEach(function(sel) {
+            var opt = sel.options[sel.selectedIndex];
+            if (!opt || !opt.value) return;
+            mappings.push({
+                entity_type: sel.dataset.entity,
+                local_id: sel.dataset.localId,
+                local_label: sel.dataset.localLabel || '',
+                arbor_id: opt.value,
+                arbor_label: opt.dataset.label || opt.textContent.trim(),
+                arbor_href: opt.dataset.href || '',
+            });
+        });
+
+        // Also save the grade set selection
+        if (gradeSetSelect && gradeSetSelect.value) {
+            var gsOpt = gradeSetSelect.options[gradeSetSelect.selectedIndex];
+            mappings.push({
+                entity_type: 'grade_set',
+                local_id: 'default',
+                local_label: 'Default Grade Set',
+                arbor_id: gradeSetSelect.value,
+                arbor_label: gsOpt.textContent.trim(),
+                arbor_href: '/rest-v2/grade-sets/' + gradeSetSelect.value,
+            });
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving…';
+
+        fetch('{% url "core:arbor_save_mappings" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}',
+            },
+            body: JSON.stringify({ mappings: mappings }),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            result.style.display = 'block';
+            if (data.ok) {
+                result.className = 'mb-4 alert alert-success py-2';
+                result.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>Mappings saved. ' + mappings.length + ' mapping(s) stored.';
+            } else {
+                result.className = 'mb-4 alert alert-danger py-2';
+                result.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>Error saving mappings.';
+            }
+        })
+        .catch(function(err) {
+            result.style.display = 'block';
+            result.className = 'mb-4 alert alert-danger py-2';
+            result.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>Request failed: ' + err;
+        })
+        .finally(function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Save Mappings';
+        });
+    });
+})();
+</script>
+{% endblock %}

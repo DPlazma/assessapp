@@ -1,0 +1,863 @@
+{% extends "base.html" %}
+{% block title %}Progress — {{ student.full_name }} — AssessApp{% endblock %}
+
+{% block content %}
+<style>
+    .progress-timeline { position: relative; padding-left: 2rem; }
+    .progress-timeline::before {
+        content: ''; position: absolute; left: 0.75rem; top: 0; bottom: 0;
+        width: 2px; background: #dee2e6;
+    }
+    .timeline-node { position: relative; }
+    .timeline-node::before {
+        content: ''; position: absolute; left: -1.625rem; top: 1.1rem;
+        width: 12px; height: 12px; border-radius: 50%;
+        background: #0d6efd; border: 2px solid #fff;
+        box-shadow: 0 0 0 2px #0d6efd;
+    }
+    .timeline-node.has-improvements::before { background: #198754; box-shadow: 0 0 0 2px #198754; }
+    .timeline-node.has-regressions::before { background: #dc3545; box-shadow: 0 0 0 2px #dc3545; }
+    .grid-cell { min-width: 100px; }
+    .grid-cell .change-arrow { font-size: 0.65rem; vertical-align: middle; }
+    .carried-status { opacity: 0.30; }
+    /* EHCP status badges */
+    .ehcp-status-NOT_STARTED { background-color: #6c757d; color: #fff; }
+    .ehcp-status-IN_PROGRESS { background-color: #0d6efd; color: #fff; }
+    .ehcp-status-PARTIALLY_MET { background-color: #ffc107; color: #212529; }
+    .ehcp-status-MET { background-color: #198754; color: #fff; }
+    .ehcp-status-EXCEEDED { background-color: #0dcaf0; color: #212529; }
+</style>
+
+{% include "students/_student_nav.html" with student_nav="progress" %}
+
+{# ── View Toggle Tabs ────────────────────────────────────────────── #}
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link {% if active_view == 'summary' %}active{% endif %}"
+           href="{% url 'students:progress' student.pk %}?view=summary">
+            <i class="bi bi-journal-text me-1"></i>Summary
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if active_view == 'assessments' %}active{% endif %}"
+           href="{% url 'students:progress' student.pk %}?view=assessments{% if selected_term %}&term={{ selected_term }}{% elif active_period == 'all time' %}&show=all{% endif %}">
+            <i class="bi bi-journal-check me-1"></i>Assessments
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if active_view == 'ehcp' %}active{% endif %}"
+           href="{% url 'students:progress' student.pk %}?view=ehcp{% if selected_term %}&term={{ selected_term }}{% elif active_period == 'all time' %}&show=all{% endif %}">
+            <i class="bi bi-clipboard2-pulse me-1"></i>EHCP Targets
+        </a>
+    </li>
+</ul>
+
+{% if active_view == "summary" %}
+{# ══════════════════════════════════════════════════════════════════ #}
+{#  SUMMARY VIEW (Learning Journey)                                  #}
+{# ══════════════════════════════════════════════════════════════════ #}
+
+{# ── Demographics Card ── #}
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-auto d-none d-md-block">
+                <table class="table table-sm table-borderless mb-0" style="font-size:0.85rem;">
+                    {% if student.date_of_birth %}<tr><th class="text-muted pe-3">DOB</th><td>{{ student.date_of_birth|date:"d-m-Y" }}</td></tr>{% endif %}
+                    {% if student.upn %}<tr><th class="text-muted pe-3">UPN</th><td>{{ student.upn }}</td></tr>{% endif %}
+                </table>
+            </div>
+            <div class="col-12 col-md-auto mt-2 mt-md-0 text-end">
+                <a href="{% url 'students:learning_journey_pdf' student.pk %}" class="btn btn-danger btn-sm">
+                    <i class="bi bi-file-earmark-pdf me-1"></i>Export PDF
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── AI Progress Summary ── #}
+{% if ai_available %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light d-flex align-items-center justify-content-between">
+        <h6 class="mb-0"><i class="bi bi-robot me-2"></i>AI Progress Summary</h6>
+        <button class="btn btn-outline-primary btn-sm"
+                hx-get="{% url 'students:ai_summary' student.pk %}"
+                hx-target="#ai-summary-content"
+                hx-swap="innerHTML"
+                hx-indicator="#ai-spinner">
+            <i class="bi bi-stars me-1"></i>{% if cached_ai_summary %}Regenerate{% else %}Generate Summary{% endif %}
+        </button>
+    </div>
+    <div class="card-body">
+        <div id="ai-summary-content">
+            {% if cached_ai_summary %}
+            {{ cached_ai_summary|safe }}
+            {% else %}
+            <p class="text-muted text-center mb-0">
+                <i class="bi bi-lightbulb me-1"></i>Click "Generate Summary" to create an AI-powered progress report for {{ student.first_name }}.
+            </p>
+            {% endif %}
+        </div>
+        <div id="ai-spinner" class="htmx-indicator text-center py-3">
+            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+            <span class="text-muted">Generating summary...</span>
+        </div>
+    </div>
+</div>
+
+{# ── AI Pattern Detection ── #}
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light d-flex align-items-center justify-content-between">
+        <h6 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i>Progress Patterns</h6>
+        <button class="btn btn-outline-info btn-sm"
+                hx-get="{% url 'students:ai_patterns' student.pk %}"
+                hx-target="#ai-patterns-content"
+                hx-swap="innerHTML"
+                hx-indicator="#ai-patterns-spinner">
+            <i class="bi bi-search me-1"></i>{% if cached_ai_patterns %}Re-analyse{% else %}Analyse Patterns{% endif %}
+        </button>
+    </div>
+    <div class="card-body">
+        <div id="ai-patterns-content">
+            {% if cached_ai_patterns %}
+            {{ cached_ai_patterns|safe }}
+            {% else %}
+            <p class="text-muted text-center mb-0 small">
+                <i class="bi bi-bar-chart-line me-1"></i>Detect trends, stalling areas, and cross-subject patterns for {{ student.first_name }}.
+            </p>
+            {% endif %}
+        </div>
+        <div id="ai-patterns-spinner" class="htmx-indicator text-center py-3">
+            <div class="spinner-border spinner-border-sm text-info me-2" role="status"></div>
+            <span class="text-muted">Analysing patterns...</span>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── Overall RAG Summary ── #}
+{% if overall_total > 0 %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="bi bi-pie-chart me-2"></i>Overall Assessment Summary</h6>
+    </div>
+    <div class="card-body">
+        <div class="row text-center mb-3">
+            <div class="col"><div class="fs-3 fw-bold text-secondary">{{ overall_nya }}</div><small class="text-muted">Not Assessed</small></div>
+            <div class="col"><div class="fs-3 fw-bold text-danger">{{ overall_emerging }}</div><small class="text-muted">Emerging</small></div>
+            <div class="col"><div class="fs-3 fw-bold" style="color: var(--rag-developing);">{{ overall_developing }}</div><small class="text-muted">Developing</small></div>
+            <div class="col"><div class="fs-3 fw-bold text-success">{{ overall_secure }}</div><small class="text-muted">Secure</small></div>
+        </div>
+        <div class="progress" style="height: 20px;">
+            <div class="progress-bar bg-danger" style="width: {% widthratio overall_emerging overall_total 100 %}%"
+                 title="Emerging: {{ overall_emerging }}">{% widthratio overall_emerging overall_total 100 %}%</div>
+            <div class="progress-bar" style="width: {% widthratio overall_developing overall_total 100 %}%; background-color: var(--rag-developing);"
+                 title="Developing: {{ overall_developing }}">{% widthratio overall_developing overall_total 100 %}%</div>
+            <div class="progress-bar bg-success" style="width: {% widthratio overall_secure overall_total 100 %}%"
+                 title="Secure: {{ overall_secure }}">{% widthratio overall_secure overall_total 100 %}%</div>
+        </div>
+        </div>
+        <small class="text-muted">{{ overall_total }} statement{{ overall_total|pluralize }} across {{ subject_summaries|length }} subject{{ subject_summaries|length|pluralize }}</small>
+        <div class="mt-3" style="max-width:280px; margin:0 auto;">
+            <canvas id="overallDoughnut" height="200"></canvas>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── Subject Breakdown ── #}
+{% if subject_summaries %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="bi bi-book me-2"></i>Subjects</h6>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            {% for s in subject_summaries %}
+            <div class="col-12 col-md-6 col-lg-4">
+                <a href="{% url 'assessments:assess_student' student.pk s.subject.pk %}" class="text-decoration-none">
+                    <div class="card h-100 border">
+                        <div class="card-body py-2">
+                            <h6 class="card-title mb-2">{{ s.subject.name }}</h6>
+                            <div class="d-flex gap-1 mb-2">
+                                <span class="badge bg-light text-dark border">{{ s.not_yet }} N</span>
+                                <span class="badge status-EME">{{ s.emerging }} E</span>
+                                <span class="badge status-DEV">{{ s.developing }} D</span>
+                                <span class="badge status-SEC">{{ s.secure }} S</span>
+                            </div>
+                            {% if s.total > 0 %}
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar bg-danger" style="width: {% widthratio s.emerging s.total 100 %}%"></div>
+                                <div class="progress-bar" style="width: {% widthratio s.developing s.total 100 %}%; background-color: var(--rag-developing);"></div>
+                                <div class="progress-bar bg-success" style="width: {% widthratio s.secure s.total 100 %}%"></div>
+                            </div>
+                            <small class="text-muted">{{ s.total }} statement{{ s.total|pluralize }}</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── Termly Snapshots ── #}
+{% if snapshot_by_term %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="bi bi-camera me-2"></i>Termly Snapshots</h6>
+    </div>
+    <div class="card-body p-0">
+        {% for term_label, snaps in snapshot_by_term.items %}
+        <h6 class="px-3 pt-3 pb-1 mb-0 text-primary">{{ term_label }}</h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Area</th>
+                        <th class="text-center">Total</th>
+                        <th class="text-center">NYA</th>
+                        <th class="text-center">Emerging</th>
+                        <th class="text-center">Developing</th>
+                        <th class="text-center">Secure</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for snap in snaps %}
+                    <tr>
+                        <td>{{ snap.area.name }} <small class="text-muted">({{ snap.area.subject.name }})</small></td>
+                        <td class="text-center">{{ snap.total_statements }}</td>
+                        <td class="text-center"><span class="badge status-NYA">{{ snap.not_assessed_count }}</span></td>
+                        <td class="text-center"><span class="badge status-EME">{{ snap.emerging_count }}</span></td>
+                        <td class="text-center"><span class="badge status-DEV">{{ snap.developing_count }}</span></td>
+                        <td class="text-center"><span class="badge status-SEC">{{ snap.secure_count }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% else %}
+{# ── Non-summary tabs: show filters ── #}
+
+<!-- Filters -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <form method="get" class="row g-2 align-items-end">
+            <input type="hidden" name="view" value="{{ active_view }}">
+            {% if active_view == "assessments" %}
+            <div class="col-md-3 col-lg-2">
+                <label class="form-label fw-bold mb-1" style="font-size:0.85rem;">Subject</label>
+                <select name="subject" class="form-select form-select-sm">
+                    <option value="">All Subjects</option>
+                    {% for subject in subjects %}
+                    <option value="{{ subject.pk }}" {% if selected_subject and selected_subject.pk == subject.pk %}selected{% endif %}>
+                        {{ subject.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="col-md-3 col-lg-2">
+                <label class="form-label fw-bold mb-1" style="font-size:0.85rem;">Academic Year</label>
+                <select name="academic_year" class="form-select form-select-sm">
+                    <option value="">All years</option>
+                    {% for ay in academic_years %}
+                    <option value="{{ ay.pk }}" {% if ay.pk|stringformat:"d" == selected_academic_year %}selected{% endif %}>
+                        {{ ay.name }}{% if ay.is_current %} (current){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 col-lg-2">
+                <label class="form-label fw-bold mb-1" style="font-size:0.85rem;">Term</label>
+                <select name="term" class="form-select form-select-sm">
+                    <option value="">All terms</option>
+                    {% for t in terms %}
+                    <option value="{{ t.pk }}" {% if t.pk|stringformat:"d" == selected_term %}selected{% endif %}>
+                        {{ t }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 col-lg-3">
+                <label class="form-label fw-bold mb-1" style="font-size:0.85rem;">Custom Dates</label>
+                <div class="d-flex gap-1">
+                    <input type="date" name="date_from" class="form-control form-control-sm"
+                           value="{{ date_from }}" title="From date">
+                    <input type="date" name="date_to" class="form-control form-control-sm"
+                           value="{{ date_to }}" title="To date">
+                </div>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="bi bi-filter me-1"></i>Apply
+                </button>
+            </div>
+            <div class="col-auto">
+                <a href="{% url 'students:progress' student.pk %}?view={{ active_view }}" class="btn btn-outline-secondary btn-sm">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{# ── Active period indicator ─────────────────────────────────────── #}
+{% if active_period %}
+<div class="d-flex align-items-center mb-3 gap-2 flex-wrap">
+    <span class="text-muted small"><i class="bi bi-calendar3 me-1"></i>Showing:</span>
+    <span class="badge bg-primary bg-opacity-75">{{ active_period }}</span>
+    {% if default_term %}
+    <span class="text-muted small">(auto-selected current term)</span>
+    {% endif %}
+    {% if active_period != "all time" %}
+    <a href="{% url 'students:progress' student.pk %}?show=all&view={{ active_view }}{% if selected_subject %}&subject={{ selected_subject.pk }}{% endif %}"
+       class="btn btn-link btn-sm text-muted p-0 ms-1" style="font-size: 0.8rem;">
+        <i class="bi bi-clock-history me-1"></i>Show all time
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if active_view == "assessments" %}
+{# ══════════════════════════════════════════════════════════════════ #}
+{#  ASSESSMENTS VIEW                                                 #}
+{# ══════════════════════════════════════════════════════════════════ #}
+{% if progress_data %}
+
+{# ── Summary Cards ───────────────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-0 bg-light h-100">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold text-primary">{{ total_assessed }}</div>
+                <div class="text-muted small">Statements Assessed</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-0 bg-light h-100">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold text-success">{{ current_counts.SEC }}</div>
+                <div class="text-muted small">Secure</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-0 bg-light h-100">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold" style="color: var(--rag-developing, #ffc107);">{{ current_counts.DEV }}</div>
+                <div class="text-muted small">Developing</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-0 bg-light h-100">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold text-success">
+                    {% if total_improvements %}<i class="bi bi-arrow-up-short"></i>{% endif %}{{ total_improvements }}
+                </div>
+                <div class="text-muted small">Improvements Made</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Progress Chart ──────────────────────────────────────────────── #}
+<div class="card mb-4">
+    <div class="card-body">
+        <canvas id="progressChart" height="300"></canvas>
+    </div>
+</div>
+
+{# ── Statement Progress Tracker ("Version History") ─────────────── #}
+<div class="d-flex align-items-center mb-3">
+    <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Statement Progress Tracker</h6>
+    <span class="text-muted small ms-2">— see how each statement has changed over time</span>
+</div>
+
+{% for subj in progress_grid %}
+<div class="card mb-3">
+    <div class="card-header bg-white py-2">
+        <h6 class="mb-0">{{ subj.subject }}</h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="small fw-bold" style="min-width: 220px; position: sticky; left: 0; background: #f8f9fa; z-index: 1;">Statement</th>
+                    {% for d in all_dates %}
+                    <th class="text-center small fw-bold grid-cell">{{ d|date:"d-m" }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for stmt in subj.statements %}
+                <tr>
+                    <td class="small" style="position: sticky; left: 0; background: #fff; z-index: 1;">{{ stmt.text }}</td>
+                    {% for cell in stmt.cells %}
+                    <td class="text-center grid-cell">
+                        {% if cell.has_data %}
+                            {% if cell.change == "improved" %}
+                                <i class="bi bi-arrow-up-circle-fill text-success change-arrow me-1"></i>
+                            {% elif cell.change == "regressed" %}
+                                <i class="bi bi-arrow-down-circle-fill text-danger change-arrow me-1"></i>
+                            {% endif %}
+                            <span class="badge status-{{ cell.status }}">{{ cell.display }}</span>
+                        {% elif cell.carried %}
+                            <span class="badge status-{{ cell.carried }} carried-status">{{ cell.carried }}</span>
+                        {% else %}
+                            <span class="text-muted small">—</span>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+
+<div class="d-flex gap-3 mb-4 flex-wrap small text-muted">
+    <span><i class="bi bi-arrow-up-circle-fill text-success me-1"></i>Improved</span>
+    <span><i class="bi bi-arrow-down-circle-fill text-danger me-1"></i>Regressed</span>
+    <span class="badge status-NYA">NYA</span>
+    <span class="badge status-EME">Emerging</span>
+    <span class="badge status-DEV">Developing</span>
+    <span class="badge status-SEC">Secure</span>
+    <span><span class="badge bg-secondary carried-status">Faded</span> = carried forward (no new assessment)</span>
+</div>
+
+{# ── Activity Timeline ───────────────────────────────────────────── #}
+<div class="d-flex align-items-center mb-3">
+    <h6 class="mb-0"><i class="bi bi-list-check me-2"></i>Activity Timeline</h6>
+    <span class="text-muted small ms-2">— what changed and when</span>
+</div>
+
+<div class="progress-timeline mb-4">
+    {% for entry in timeline %}
+    <div class="timeline-node mb-3 {% if entry.improved %}has-improvements{% elif entry.regressed %}has-regressions{% endif %}"
+         x-data="{ open: {% if forloop.first %}true{% else %}false{% endif %} }">
+        {# Date header with summary badges #}
+        <div class="d-flex align-items-center justify-content-between mb-2 cursor-pointer"
+             @click="open = !open" style="cursor: pointer;">
+            <div>
+                <strong>{{ entry.date|date:"d-m-Y" }}</strong>
+                <span class="ms-2">
+                    {% if entry.improved %}
+                    <span class="badge bg-success bg-opacity-75 small"><i class="bi bi-arrow-up-short"></i>{{ entry.improved }} improved</span>
+                    {% endif %}
+                    {% if entry.new %}
+                    <span class="badge bg-info text-dark bg-opacity-75 small"><i class="bi bi-plus-circle me-1"></i>{{ entry.new }} new</span>
+                    {% endif %}
+                    {% if entry.maintained %}
+                    <span class="badge bg-secondary bg-opacity-50 small">{{ entry.maintained }} unchanged</span>
+                    {% endif %}
+                    {% if entry.regressed %}
+                    <span class="badge bg-danger bg-opacity-75 small"><i class="bi bi-arrow-down-short"></i>{{ entry.regressed }} regressed</span>
+                    {% endif %}
+                </span>
+            </div>
+            <button class="btn btn-sm btn-link text-muted p-0">
+                <i class="bi" :class="open ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+            </button>
+        </div>
+
+        {# Expandable detail #}
+        <div x-show="open" x-transition.duration.200ms>
+            {% regroup entry.entries by subject as subject_groups %}
+            {% for group in subject_groups %}
+            <div class="ms-1 mb-2">
+                <span class="badge bg-secondary bg-opacity-25 text-dark mb-1 small">{{ group.grouper }}</span>
+                {% for item in group.list %}
+                <div class="d-flex align-items-center py-1 {% if not forloop.last %}border-bottom{% endif %}">
+                    <div class="flex-grow-1 small text-truncate pe-2" title="{{ item.statement }}">
+                        {% if item.change_type == "improved" %}
+                            <i class="bi bi-check-circle-fill text-success me-1"></i>
+                        {% elif item.change_type == "regressed" %}
+                            <i class="bi bi-exclamation-circle-fill text-danger me-1"></i>
+                        {% elif item.change_type == "new" %}
+                            <i class="bi bi-plus-circle text-info me-1"></i>
+                        {% else %}
+                            <i class="bi bi-dash-circle text-secondary me-1"></i>
+                        {% endif %}
+                        {{ item.statement }}
+                    </div>
+                    <div class="text-nowrap ms-2 small">
+                        {% if item.prev_status %}
+                        <span class="badge status-{{ item.prev_status }}">{{ item.prev_display }}</span>
+                        <i class="bi bi-arrow-right mx-1 text-muted" style="font-size: 0.7rem;"></i>
+                        {% endif %}
+                        <span class="badge status-{{ item.status }}">{{ item.status_display }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-graph-up" style="font-size: 2rem;"></i>
+    <p class="mt-2">No assessment records yet.</p>
+</div>
+{% endif %}
+{# end assessments view #}
+
+{% elif active_view == "ehcp" %}
+{# ══════════════════════════════════════════════════════════════════ #}
+{#  EHCP TARGETS VIEW                                               #}
+{# ══════════════════════════════════════════════════════════════════ #}
+{% if ehcp_grid %}
+
+{# ── EHCP Summary Cards ──────────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-0 bg-light h-100">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold text-primary">{{ ehcp_total }}</div>
+                <div class="text-muted small">Total Targets</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-0 bg-light h-100">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold text-success">{{ ehcp_met_exceeded }}</div>
+                <div class="text-muted small">Met / Exceeded</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-0 bg-light h-100">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold text-info">{{ ehcp_counts.IN_PROGRESS|default:"0" }}</div>
+                <div class="text-muted small">In Progress</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center border-0 bg-light h-100">
+            <div class="card-body py-3">
+                <div class="fs-3 fw-bold text-success">
+                    {% if ehcp_improvements %}<i class="bi bi-arrow-up-short"></i>{% endif %}{{ ehcp_improvements }}
+                </div>
+                <div class="text-muted small">Improvements Made</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── EHCP Target Progress Tracker ───────────────────────────────── #}
+<div class="d-flex align-items-center mb-3">
+    <h6 class="mb-0"><i class="bi bi-clipboard2-pulse me-2"></i>Target Progress Tracker</h6>
+    <span class="text-muted small ms-2">— see how each EHCP target has changed over time</span>
+</div>
+
+{% for group in ehcp_grid %}
+<div class="card mb-3">
+    <div class="card-header bg-white py-2">
+        <h6 class="mb-0">{{ group.outcome }}</h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="small fw-bold" style="min-width: 220px; position: sticky; left: 0; background: #f8f9fa; z-index: 1;">Target</th>
+                    {% for d in ehcp_dates %}
+                    <th class="text-center small fw-bold grid-cell">{{ d|date:"d-m" }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for tgt in group.targets %}
+                <tr>
+                    <td class="small" style="position: sticky; left: 0; background: #fff; z-index: 1;">
+                        <a href="{% url 'evidence:ehcp_target_detail' tgt.tid %}" class="text-decoration-none">
+                            {{ tgt.text }}
+                        </a>
+                    </td>
+                    {% for cell in tgt.cells %}
+                    <td class="text-center grid-cell">
+                        {% if cell.has_data %}
+                            {% if cell.change == "improved" %}
+                                <i class="bi bi-arrow-up-circle-fill text-success change-arrow me-1"></i>
+                            {% elif cell.change == "regressed" %}
+                                <i class="bi bi-arrow-down-circle-fill text-danger change-arrow me-1"></i>
+                            {% endif %}
+                            <span class="badge ehcp-status-{{ cell.status }}">{{ cell.display }}</span>
+                            {% if cell.notes %}<br><span class="text-muted small" style="font-size:0.7rem;" title="{{ cell.notes }}"><i class="bi bi-chat-left-text"></i></span>{% endif %}
+                        {% elif cell.carried %}
+                            <span class="badge ehcp-status-{{ cell.carried }} carried-status">{{ cell.carried }}</span>
+                        {% else %}
+                            <span class="text-muted small">—</span>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+
+<div class="d-flex gap-3 mb-4 flex-wrap small text-muted">
+    <span><i class="bi bi-arrow-up-circle-fill text-success me-1"></i>Improved</span>
+    <span><i class="bi bi-arrow-down-circle-fill text-danger me-1"></i>Regressed</span>
+    <span class="badge ehcp-status-NOT_STARTED">Not Started</span>
+    <span class="badge ehcp-status-IN_PROGRESS">In Progress</span>
+    <span class="badge ehcp-status-PARTIALLY_MET">Partially Met</span>
+    <span class="badge ehcp-status-MET">Met</span>
+    <span class="badge ehcp-status-EXCEEDED">Exceeded</span>
+    <span><span class="badge bg-secondary carried-status">Faded</span> = carried forward (no new review)</span>
+</div>
+
+{# ── EHCP Activity Timeline ──────────────────────────────────────── #}
+<div class="d-flex align-items-center mb-3">
+    <h6 class="mb-0"><i class="bi bi-list-check me-2"></i>Review Timeline</h6>
+    <span class="text-muted small ms-2">— target reviews and status changes</span>
+</div>
+
+<div class="progress-timeline mb-4">
+    {% for entry in ehcp_timeline %}
+    <div class="timeline-node mb-3 {% if entry.improved %}has-improvements{% elif entry.regressed %}has-regressions{% endif %}"
+         x-data="{ open: {% if forloop.first %}true{% else %}false{% endif %} }">
+        <div class="d-flex align-items-center justify-content-between mb-2"
+             @click="open = !open" style="cursor: pointer;">
+            <div>
+                <strong>{{ entry.date|date:"d-m-Y" }}</strong>
+                <span class="ms-2">
+                    {% if entry.improved %}
+                    <span class="badge bg-success bg-opacity-75 small"><i class="bi bi-arrow-up-short"></i>{{ entry.improved }} improved</span>
+                    {% endif %}
+                    {% if entry.new %}
+                    <span class="badge bg-info text-dark bg-opacity-75 small"><i class="bi bi-plus-circle me-1"></i>{{ entry.new }} new</span>
+                    {% endif %}
+                    {% if entry.maintained %}
+                    <span class="badge bg-secondary bg-opacity-50 small">{{ entry.maintained }} unchanged</span>
+                    {% endif %}
+                    {% if entry.regressed %}
+                    <span class="badge bg-danger bg-opacity-75 small"><i class="bi bi-arrow-down-short"></i>{{ entry.regressed }} regressed</span>
+                    {% endif %}
+                </span>
+            </div>
+            <button class="btn btn-sm btn-link text-muted p-0">
+                <i class="bi" :class="open ? 'bi-chevron-up' : 'bi-chevron-down'"></i>
+            </button>
+        </div>
+
+        <div x-show="open" x-transition.duration.200ms>
+            {% regroup entry.entries by outcome as outcome_groups %}
+            {% for group in outcome_groups %}
+            <div class="ms-1 mb-2">
+                <span class="badge bg-secondary bg-opacity-25 text-dark mb-1 small">{{ group.grouper }}</span>
+                {% for item in group.list %}
+                <div class="d-flex align-items-center py-1 {% if not forloop.last %}border-bottom{% endif %}">
+                    <div class="flex-grow-1 small pe-2">
+                        {% if item.change_type == "improved" %}
+                            <i class="bi bi-check-circle-fill text-success me-1"></i>
+                        {% elif item.change_type == "regressed" %}
+                            <i class="bi bi-exclamation-circle-fill text-danger me-1"></i>
+                        {% elif item.change_type == "new" %}
+                            <i class="bi bi-plus-circle text-info me-1"></i>
+                        {% else %}
+                            <i class="bi bi-dash-circle text-secondary me-1"></i>
+                        {% endif %}
+                        <a href="{% url 'evidence:ehcp_target_detail' item.target_id %}" class="text-decoration-none">{{ item.target }}</a>
+                        {% if item.notes %}<br><span class="text-muted" style="font-size:0.75rem;">{{ item.notes|truncatewords:20 }}</span>{% endif %}
+                    </div>
+                    <div class="text-nowrap ms-2 small">
+                        {% if item.prev_status %}
+                        <span class="badge ehcp-status-{{ item.prev_status }}">{{ item.prev_display }}</span>
+                        <i class="bi bi-arrow-right mx-1 text-muted" style="font-size: 0.7rem;"></i>
+                        {% endif %}
+                        <span class="badge ehcp-status-{{ item.status }}">{{ item.status_display }}</span>
+                    </div>
+                    {% if item.reviewed_by %}
+                    <div class="text-muted small ms-2" style="font-size:0.7rem;">{{ item.reviewed_by }}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-clipboard2-pulse" style="font-size: 2rem;"></i>
+    <p class="mt-2">No EHCP target reviews yet for this period.</p>
+</div>
+{% endif %}
+{# end ehcp view #}
+
+{% endif %}
+{# end assessments/ehcp filter views #}
+{% endif %}
+{# end summary vs other views #}
+{% endblock %}
+
+{% block extra_js %}
+{% if active_view == "assessments" and progress_data %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+{{ progress_data|json_script:"progress-data" }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const rawData = JSON.parse(document.getElementById('progress-data').textContent);
+
+    // Map status to numeric value for charting
+    const statusValue = { 'NYA': 0, 'EME': 1, 'DEV': 2, 'SEC': 3 };
+    const statusLabels = ['Not Assessed', 'Emerging', 'Developing', 'Secure'];
+    const colours = [
+        'rgba(54, 162, 235, 0.8)',
+        'rgba(255, 99, 132, 0.8)',
+        'rgba(255, 205, 86, 0.8)',
+        'rgba(75, 192, 192, 0.8)',
+        'rgba(153, 102, 255, 0.8)',
+    ];
+
+    // Collect all unique dates across subjects
+    function formatDate(iso) { const [y,m,d] = iso.split('-'); return d+'-'+m+'-'+y; }
+
+    const allDates = new Set();
+    const datasets = [];
+    let colIdx = 0;
+
+    for (const [subjectName, records] of Object.entries(rawData)) {
+        // For each date, compute average status across statements assessed that day
+        const dateMap = {};
+        records.forEach(r => {
+            if (!dateMap[r.date]) dateMap[r.date] = [];
+            dateMap[r.date].push(statusValue[r.status] || 0);
+        });
+
+        const dates = Object.keys(dateMap).sort();
+        dates.forEach(d => allDates.add(d));
+
+        // Running cumulative: for each date, average of statuses that day
+        let cumulativeTotal = 0, cumulativeCount = 0;
+        let cumCounts = {sec: 0, dev: 0, eme: 0, nya: 0};
+        const valKey = {3: 'sec', 2: 'dev', 1: 'eme', 0: 'nya'};
+        const dataPoints = dates.map(d => {
+            const vals = dateMap[d];
+            vals.forEach(v => { cumulativeTotal += v; cumulativeCount++; cumCounts[valKey[v]]++; });
+            return {
+                x: d,
+                y: parseFloat((cumulativeTotal / cumulativeCount).toFixed(2)),
+                count: cumulativeCount,
+                day: vals.length,
+                sec: cumCounts.sec, dev: cumCounts.dev, eme: cumCounts.eme, nya: cumCounts.nya,
+            };
+        });
+
+        datasets.push({
+            label: subjectName,
+            data: dataPoints,
+            borderColor: colours[colIdx % colours.length],
+            backgroundColor: colours[colIdx % colours.length],
+            tension: 0.3,
+            fill: false,
+        });
+        colIdx++;
+    }
+
+    new Chart(document.getElementById('progressChart'), {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'category',
+                    labels: [...allDates].sort(),
+                    title: { display: true, text: 'Date' },
+                    ticks: { callback: function(value) { return formatDate(this.getLabelForValue(value)); } },
+                },
+                y: {
+                    min: 0, max: 3,
+                    ticks: {
+                        stepSize: 1,
+                        callback: function(value) { return statusLabels[value] || ''; },
+                    },
+                    title: { display: true, text: 'Cumulative Average Status' },
+                },
+            },
+            plugins: {
+                tooltip: {
+                    displayColors: true,
+                    callbacks: {
+                        title: function(items) {
+                            return formatDate(items[0].raw.x);
+                        },
+                        label: function(ctx) {
+                            const p = ctx.raw;
+                            const closest = Math.round(p.y);
+                            return ctx.dataset.label + ': ' + statusLabels[closest] + ' (' + p.y.toFixed(2) + ')';
+                        },
+                        afterLabel: function(ctx) {
+                            const p = ctx.raw;
+                            const lines = [];
+                            lines.push('Based on ' + p.count + ' assessment' + (p.count !== 1 ? 's' : '') + ' to date');
+                            lines.push('  NYA: ' + p.nya + '  Emerging: ' + p.eme);
+                            lines.push('  Developing: ' + p.dev + '  Secure: ' + p.sec);
+                            lines.push(p.day + ' recorded on this date');
+                            return lines;
+                        },
+                    },
+                },
+            },
+        },
+    });
+});
+</script>
+{% endif %}
+
+{% if active_view == "summary" and overall_total > 0 %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    new Chart(document.getElementById('overallDoughnut'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Not Assessed', 'Emerging', 'Developing', 'Secure'],
+            datasets: [{
+                data: [{{ overall_nya }}, {{ overall_emerging }}, {{ overall_developing }}, {{ overall_secure }}],
+                backgroundColor: ['#6c757d', '#dc3545', '#fd7e14', '#198754'],
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) {
+                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                            const val = ctx.raw;
+                            const pct = total > 0 ? Math.round(val / total * 100) : 0;
+                            return ctx.label + ': ' + val + ' of ' + total + ' (' + pct + '%)';
+                        },
+                    },
+                },
+            },
+            cutout: '55%',
+        }
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

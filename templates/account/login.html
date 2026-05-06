@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% load allauth socialaccount %}
+{% block title %}Sign In — AssessApp{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-11 col-sm-8 col-md-5 col-lg-4">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h3 class="card-title text-center mb-4">
+                    <i class="bi bi-journal-check text-primary"></i><br>
+                    Sign In
+                </h3>
+
+                <!-- Microsoft SSO -->
+                {% get_providers as socialaccount_providers %}
+                {% if socialaccount_providers %}
+                {% for provider in socialaccount_providers %}
+                {% if provider.id == "microsoft" %}
+                <a href="{% provider_login_url provider.id process='login' %}"
+                   class="btn btn-lg w-100 mb-3"
+                   style="background-color:#2f2f2f; color:#fff; border:none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21" class="me-2" style="vertical-align: text-bottom;">
+                        <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+                        <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+                        <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+                        <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+                    </svg>
+                    Sign in with Microsoft 365
+                </a>
+                {% endif %}
+                {% endfor %}
+
+                <div class="text-center text-muted small mb-3 position-relative">
+                    <hr>
+                    <span class="px-2 bg-white position-absolute top-50 start-50 translate-middle">
+                        or sign in with username
+                    </span>
+                </div>
+                {% endif %}
+
+                <form method="post" action="{% url 'account_login' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="id_login" class="form-label">Username</label>
+                        <input type="text" name="login" id="id_login"
+                               class="form-control form-control-lg" autofocus required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_password" class="form-label">Password</label>
+                        <input type="password" name="password" id="id_password"
+                               class="form-control form-control-lg" required>
+                    </div>
+                    {% if form.errors %}
+                    <div class="alert alert-danger">
+                        Invalid username or password. Please try again.
+                    </div>
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary btn-lg w-100 mt-2">
+                        Sign In
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "pdf/base_pdf.html" %}
+{% block title %}Cohort Report{% endblock %}
+{% block page_orientation %} landscape{% endblock %}
+
+{% block extra_css %}
+td.st { text-align: center; font-size: 8pt; font-weight: 600; color: white; padding: 1mm; }
+td.st-SEC { background-color: #198754; }
+td.st-DEV { background-color: #fd7e14; }
+td.st-EME { background-color: #dc3545; }
+td.st-NYA { background-color: #6c757d; }
+th.rotate { font-size: 7pt; max-width: 10mm; vertical-align: bottom; padding-bottom: 2mm; }
+th.rotate span { writing-mode: vertical-lr; transform: rotate(180deg); display: inline-block; max-height: 30mm; overflow: hidden; }
+{% endblock %}
+
+{% block content %}
+<h1>Cohort Report</h1>
+<p class="meta">{{ time_label }} · {{ rows|length }} students · {{ stmt_headers|length }} statements · Generated {{ today|date:"d-m-Y" }}</p>
+
+{% if rows and stmt_headers %}
+<table>
+    <thead>
+        <tr>
+            <th>Student</th>
+            <th>Class</th>
+            <th class="num">N</th>
+            <th class="num">E</th>
+            <th class="num">D</th>
+            <th class="num">S</th>
+            {% for hdr in stmt_headers %}
+            <th class="rotate"><span>{{ hdr }}</span></th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr class="avoid-break">
+            <td style="white-space:nowrap;">{{ row.name }}</td>
+            <td>{{ row.class_name }}</td>
+            <td class="num" style="color:#6c757d;">{{ row.nya }}</td>
+            <td class="num" style="color:#dc3545;font-weight:700;">{{ row.eme }}</td>
+            <td class="num" style="color:#fd7e14;font-weight:700;">{{ row.dev }}</td>
+            <td class="num" style="color:#198754;font-weight:700;">{{ row.sec }}</td>
+            {% for cell in row.cells %}
+            <td class="st st-{{ cell }}">{{ cell }}</td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No data to display for the selected filters.</p>
+{% endif %}
+{% endblock %}

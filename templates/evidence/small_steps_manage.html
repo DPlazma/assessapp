@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Small Steps — {{ target.title|truncatechars:40 }}{% endblock %}
+
+{% block content %}
+{% include "students/_student_nav.html" with student_nav="ehcp" %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <h5 class="mb-0">
+            <i class="bi bi-signpost-split text-primary me-2"></i>Small Steps
+        </h5>
+        <small class="text-muted">{{ target.title|truncatechars:80 }}</small>
+    </div>
+</div>
+
+{% if target.outcome %}
+<div class="alert alert-light border mb-3">
+    <strong>EHCP Outcome:</strong> {{ target.outcome.name }}
+</div>
+{% endif %}
+
+<!-- Steps Table -->
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <h6 class="mb-0"><i class="bi bi-list-ol me-1"></i>Steps ({{ steps|length }})</h6>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#addStepForm">
+            <i class="bi bi-plus-lg me-1"></i>Add Step
+        </button>
+    </div>
+
+    <!-- Add Step Form (collapsed by default) -->
+    <div class="collapse" id="addStepForm">
+        <div class="card-body border-bottom bg-light">
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add">
+                <div class="row g-2 align-items-end">
+                    <div class="col-auto">
+                        <label class="form-label small text-muted">Letter</label>
+                        <input type="text" name="letter" class="form-control form-control-sm"
+                               maxlength="2" style="width: 60px;" placeholder="A"
+                               required>
+                    </div>
+                    <div class="col">
+                        <label class="form-label small text-muted">Description</label>
+                        <input type="text" name="description" class="form-control form-control-sm"
+                               placeholder="e.g. Uses voice or gesture to attract attention"
+                               required>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-plus-lg me-1"></i>Add
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if steps %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 60px;">Step</th>
+                    <th>Description</th>
+                    <th style="width: 160px;">Status</th>
+                    <th style="width: 100px;">Date</th>
+                    <th style="width: 60px;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for step in steps %}
+                <tr id="step-row-{{ step.pk }}">
+                    <td>
+                        <span class="badge bg-primary fs-6">{{ step.letter }}</span>
+                    </td>
+                    <td>{{ step.description }}</td>
+                    <td>
+                        <form hx-post="{% url 'evidence:small_step_update_status' step.pk %}"
+                              hx-target="#step-row-{{ step.pk }}"
+                              hx-swap="outerHTML">
+                            {% csrf_token %}
+                            <select name="status" class="form-select form-select-sm
+                                {% if step.status == 'ACHIEVED' %}border-success text-success
+                                {% elif step.status == 'WORKING_ON' %}border-primary text-primary
+                                {% else %}border-secondary
+                                {% endif %}"
+                                onchange="this.form.requestSubmit()">
+                                <option value="NOT_STARTED" {% if step.status == "NOT_STARTED" %}selected{% endif %}>Not Started</option>
+                                <option value="WORKING_ON" {% if step.status == "WORKING_ON" %}selected{% endif %}>Working On</option>
+                                <option value="ACHIEVED" {% if step.status == "ACHIEVED" %}selected{% endif %}>Achieved</option>
+                            </select>
+                        </form>
+                    </td>
+                    <td>
+                        <small class="text-muted">
+                            {% if step.status_date %}{{ step.status_date|date:"d-m-Y" }}{% else %}—{% endif %}
+                        </small>
+                    </td>
+                    <td>
+                        <form method="post" class="d-inline"
+                              onsubmit="return confirm('Delete step {{ step.letter }}?')">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete">
+                            <input type="hidden" name="step_pk" value="{{ step.pk }}">
+                            <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Progress Summary -->
+    {% with total=steps|length %}
+    <div class="card-footer bg-white">
+        <div class="row text-center">
+            <div class="col">
+                <div class="fw-bold text-success">
+                    {% widthratio achieved_count total 100 as ach_pct %}
+                    {{ achieved_count|default:"0" }} / {{ total }}
+                </div>
+                <small class="text-muted">Achieved</small>
+            </div>
+            <div class="col">
+                <div class="progress" style="height: 10px; margin-top: 6px;">
+                    {% for step in steps %}
+                    <div class="progress-bar
+                        {% if step.status == 'ACHIEVED' %}bg-success
+                        {% elif step.status == 'WORKING_ON' %}bg-primary
+                        {% else %}bg-light border
+                        {% endif %}"
+                        style="width: {% widthratio 1 total 100 %}%"></div>
+                    {% endfor %}
+                </div>
+                <small class="text-muted">Progress</small>
+            </div>
+        </div>
+    </div>
+    {% endwith %}
+    {% else %}
+    <div class="card-body text-center text-muted py-4">
+        <i class="bi bi-signpost-split" style="font-size: 2rem;"></i>
+        <p class="small mt-2 mb-0">No small steps yet. Click "Add Step" to create the first one.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

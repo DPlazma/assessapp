@@ -1,0 +1,47 @@
+<!-- Evidence This Term -->
+{% with by_type=widget.extra_context.evidence_by_type total=widget.extra_context.evidence_total %}
+{% if total %}
+<div class="text-center mb-3">
+    <div class="fs-2 fw-bold text-primary">{{ total }}</div>
+    <div class="small text-muted">pieces of evidence</div>
+</div>
+
+<div class="row g-2 text-center small">
+    {% if by_type.PHOTO %}
+    <div class="col-4">
+        <i class="bi bi-camera text-success" style="font-size: 1.3rem;"></i>
+        <div class="fw-bold">{{ by_type.PHOTO }}</div>
+        <div class="text-muted">Photos</div>
+    </div>
+    {% endif %}
+    {% if by_type.VIDEO %}
+    <div class="col-4">
+        <i class="bi bi-camera-video text-warning" style="font-size: 1.3rem;"></i>
+        <div class="fw-bold">{{ by_type.VIDEO }}</div>
+        <div class="text-muted">Videos</div>
+    </div>
+    {% endif %}
+    {% if by_type.DOCUMENT %}
+    <div class="col-4">
+        <i class="bi bi-file-earmark text-info" style="font-size: 1.3rem;"></i>
+        <div class="fw-bold">{{ by_type.DOCUMENT }}</div>
+        <div class="text-muted">Docs</div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="text-end mt-2">
+    <a href="{% url 'evidence:evidence_gallery_all' %}" class="small text-decoration-none">
+        View gallery <i class="bi bi-arrow-right"></i>
+    </a>
+</div>
+{% else %}
+<div class="text-center text-muted py-3">
+    <i class="bi bi-camera-video" style="font-size: 2rem;"></i>
+    <p class="small mb-0 mt-2">No evidence captured this term.</p>
+    <a href="{% url 'evidence:quick_evidence_upload' %}" class="btn btn-outline-primary btn-sm mt-2">
+        <i class="bi bi-plus me-1"></i>Record evidence
+    </a>
+</div>
+{% endif %}
+{% endwith %}

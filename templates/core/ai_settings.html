@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}AI Settings — AssessApp{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'core:setup_hub' %}" class="text-decoration-none">
+        <i class="bi bi-arrow-left me-1"></i>Back to Setup
+    </a>
+</div>
+
+<h4 class="mb-4"><i class="bi bi-robot me-2"></i>AI Settings</h4>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+
+            <!-- Master toggle -->
+            <div class="form-check form-switch mb-4">
+                <input class="form-check-input" type="checkbox" id="enabled" name="enabled"
+                       {% if settings.enabled %}checked{% endif %}>
+                <label class="form-check-label fw-semibold" for="enabled">
+                    Enable AI features
+                </label>
+                <div class="form-text">When disabled, all AI-powered features are turned off.</div>
+            </div>
+
+            <hr>
+
+            <!-- Provider -->
+            <div class="mb-3">
+                <label for="provider" class="form-label fw-semibold">Provider</label>
+                <select class="form-select" id="provider" name="provider">
+                    <option value="none" {% if settings.provider == "none" %}selected{% endif %}>
+                        Disabled
+                    </option>
+                    <option value="openai" {% if settings.provider == "openai" %}selected{% endif %}>
+                        OpenAI
+                    </option>
+                    <option value="azure" {% if settings.provider == "azure" %}selected{% endif %}>
+                        Azure OpenAI
+                    </option>
+                    <option value="copilot" {% if settings.provider == "copilot" %}selected{% endif %}>
+                        Microsoft 365 Copilot
+                    </option>
+                    <option value="gemini" {% if settings.provider == "gemini" %}selected{% endif %}>
+                        Google Gemini
+                    </option>
+                    <option value="ollama" {% if settings.provider == "ollama" %}selected{% endif %}>
+                        Ollama (local)
+                    </option>
+                    <option value="custom" {% if settings.provider == "custom" %}selected{% endif %}>
+                        Custom endpoint
+                    </option>
+                </select>
+            </div>
+
+            <!-- API Key -->
+            <div class="mb-3">
+                <label for="api_key" class="form-label fw-semibold">API Key</label>
+                <input type="password" class="form-control" id="api_key" name="api_key"
+                       value="{{ settings.api_key }}" autocomplete="off"
+                       placeholder="sk-...">
+                <div class="form-text">Required for OpenAI and Azure. Leave blank for Ollama.</div>
+            </div>
+
+            <!-- Endpoint URL -->
+            <div class="mb-3">
+                <label for="endpoint_url" class="form-label fw-semibold">Endpoint URL</label>
+                <input type="url" class="form-control" id="endpoint_url" name="endpoint_url"
+                       value="{{ settings.endpoint_url }}"
+                       placeholder="https://api.openai.com/v1">
+                <div class="form-text">Base URL for API calls. Required for Azure, Ollama and Custom providers.</div>
+            </div>
+
+            <!-- Model -->
+            <div class="mb-3">
+                <label for="model_name" class="form-label fw-semibold">Model name</label>
+                <input type="text" class="form-control" id="model_name" name="model_name"
+                       value="{{ settings.model_name }}"
+                       placeholder="gpt-4o">
+                <div class="form-text">e.g. gpt-4o, gpt-3.5-turbo, llama3</div>
+            </div>
+
+            <div class="d-flex gap-2 mb-3">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle me-1"></i>Save Settings
+                </button>
+                <a href="{% url 'core:setup_hub' %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+
+        <hr>
+        <h6 class="mb-3"><i class="bi bi-plug me-1"></i>Test Connection</h6>
+        <p class="text-muted small">Save your settings first, then click below to verify the connection.</p>
+        <button type="button" class="btn btn-outline-info" id="btn-test">
+            <i class="bi bi-lightning-charge me-1"></i>Test Connection
+        </button>
+        <div id="test-result" class="mt-2" style="display:none;"></div>
+    </div>
+</div>
+
+<script>
+document.getElementById('btn-test').addEventListener('click', function() {
+    const btn = this;
+    const result = document.getElementById('test-result');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Testing…';
+    result.style.display = 'none';
+
+    fetch('{% url "core:ai_test_connection" %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json',
+        },
+    })
+    .then(r => r.json())
+    .then(data => {
+        result.style.display = 'block';
+        if (data.ok) {
+            result.className = 'mt-2 alert alert-success py-2';
+            result.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>' + data.msg;
+        } else {
+            result.className = 'mt-2 alert alert-danger py-2';
+            result.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i>' + data.msg;
+        }
+    })
+    .catch(err => {
+        result.style.display = 'block';
+        result.className = 'mt-2 alert alert-danger py-2';
+        result.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i>Request failed: ' + err;
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Test Connection';
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+{% block title %}Learning Journey — {{ student.full_name }} — AssessApp{% endblock %}
+
+{% block content %}
+{% include "students/_student_nav.html" with student_nav="journey" %}
+
+<!-- ═══════════════════ DEMOGRAPHICS CARD ═══════════════════ -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-auto d-none d-md-block">
+                <table class="table table-sm table-borderless mb-0" style="font-size:0.85rem;">
+                    {% if student.date_of_birth %}
+                    <tr><th class="text-muted pe-3">DOB</th><td>{{ student.date_of_birth|date:"d-m-Y" }}</td></tr>
+                    {% endif %}
+                    {% if student.upn %}
+                    <tr><th class="text-muted pe-3">UPN</th><td>{{ student.upn }}</td></tr>
+                    {% endif %}
+                </table>
+            </div>
+            <div class="col-12 col-md-auto mt-2 mt-md-0 text-end">
+                <a href="{% url 'students:learning_journey_pdf' student.pk %}" class="btn btn-danger btn-sm">
+                    <i class="bi bi-file-earmark-pdf me-1"></i>Export PDF
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════ OVERALL RAG SUMMARY ═══════════════════ -->
+{% if overall_total > 0 %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="bi bi-pie-chart me-2"></i>Overall Assessment Summary</h6>
+    </div>
+    <div class="card-body">
+        <div class="row text-center mb-3">
+            <div class="col">
+                <div class="fs-3 fw-bold text-secondary">{{ overall_nya }}</div>
+                <small class="text-muted">Not Assessed</small>
+            </div>
+            <div class="col">
+                <div class="fs-3 fw-bold text-danger">{{ overall_emerging }}</div>
+                <small class="text-muted">Emerging</small>
+            </div>
+            <div class="col">
+                <div class="fs-3 fw-bold" style="color: var(--rag-developing);">{{ overall_developing }}</div>
+                <small class="text-muted">Developing</small>
+            </div>
+            <div class="col">
+                <div class="fs-3 fw-bold text-success">{{ overall_secure }}</div>
+                <small class="text-muted">Secure</small>
+            </div>
+        </div>
+        <div class="progress" style="height: 20px;">
+            <div class="progress-bar bg-danger" style="width: {% widthratio overall_emerging overall_total 100 %}%"
+                 title="Emerging: {{ overall_emerging }}">{% widthratio overall_emerging overall_total 100 %}%</div>
+            <div class="progress-bar" style="width: {% widthratio overall_developing overall_total 100 %}%; background-color: var(--rag-developing);"
+                 title="Developing: {{ overall_developing }}">{% widthratio overall_developing overall_total 100 %}%</div>
+            <div class="progress-bar bg-success" style="width: {% widthratio overall_secure overall_total 100 %}%"
+                 title="Secure: {{ overall_secure }}">{% widthratio overall_secure overall_total 100 %}%</div>
+        </div>
+        </div>
+        <small class="text-muted">{{ overall_total }} statement{{ overall_total|pluralize }} across {{ subject_summaries|length }} subject{{ subject_summaries|length|pluralize }}</small>
+
+        <!-- Doughnut chart -->
+        <div class="mt-3" style="max-width:280px; margin:0 auto;">
+            <canvas id="overallDoughnut" height="200"></canvas>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ═══════════════════ SUBJECT BREAKDOWN ═══════════════════ -->
+{% if subject_summaries %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="bi bi-book me-2"></i>Subjects</h6>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            {% for s in subject_summaries %}
+            <div class="col-12 col-md-6 col-lg-4">
+                <a href="{% url 'assessments:assess_student' student.pk s.subject.pk %}" class="text-decoration-none">
+                    <div class="card h-100 border">
+                        <div class="card-body py-2">
+                            <h6 class="card-title mb-2">{{ s.subject.name }}</h6>
+                            <div class="d-flex gap-1 mb-2">
+                                <span class="badge bg-light text-dark border">{{ s.not_yet }} N</span>
+                                <span class="badge status-EME">{{ s.emerging }} E</span>
+                                <span class="badge status-DEV">{{ s.developing }} D</span>
+                                <span class="badge status-SEC">{{ s.secure }} S</span>
+                            </div>
+                            {% if s.total > 0 %}
+                            <div class="progress" style="height: 10px;">
+                                <div class="progress-bar bg-danger" style="width: {% widthratio s.emerging s.total 100 %}%"></div>
+                                <div class="progress-bar" style="width: {% widthratio s.developing s.total 100 %}%; background-color: var(--rag-developing);"></div>
+                                <div class="progress-bar bg-success" style="width: {% widthratio s.secure s.total 100 %}%"></div>
+                            </div>
+                            <small class="text-muted">{{ s.total }} statement{{ s.total|pluralize }}</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ═══════════════════ PROGRESS CHART ═══════════════════ -->
+{% if progress_data %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="bi bi-graph-up me-2"></i>Progress Over Time</h6>
+    </div>
+    <div class="card-body">
+        <canvas id="progressChart" height="280"></canvas>
+    </div>
+</div>
+{% endif %}
+
+<!-- ═══════════════════ SNAPSHOT HISTORY ═══════════════════ -->
+{% if snapshot_by_term %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light">
+        <h6 class="mb-0"><i class="bi bi-camera me-2"></i>Termly Snapshots</h6>
+    </div>
+    <div class="card-body p-0">
+        {% for term_label, snaps in snapshot_by_term.items %}
+        <h6 class="px-3 pt-3 pb-1 mb-0 text-primary">{{ term_label }}</h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Area</th>
+                        <th class="text-center">Total</th>
+                        <th class="text-center">NYA</th>
+                        <th class="text-center">Emerging</th>
+                        <th class="text-center">Developing</th>
+                        <th class="text-center">Secure</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for snap in snaps %}
+                    <tr>
+                        <td>{{ snap.area.name }} <small class="text-muted">({{ snap.area.subject.name }})</small></td>
+                        <td class="text-center">{{ snap.total_statements }}</td>
+                        <td class="text-center"><span class="badge status-NYA">{{ snap.not_assessed_count }}</span></td>
+                        <td class="text-center"><span class="badge status-EME">{{ snap.emerging_count }}</span></td>
+                        <td class="text-center"><span class="badge status-DEV">{{ snap.developing_count }}</span></td>
+                        <td class="text-center"><span class="badge status-SEC">{{ snap.secure_count }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- ═══════════════════ ASSESSMENT TIMELINE ═══════════════════ -->
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light d-flex align-items-center">
+        <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Assessments</h6>
+        <small class="text-muted ms-auto">Last 50 entries</small>
+    </div>
+    {% if recent_records %}
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Subject</th>
+                        <th>Statement</th>
+                        <th>Status</th>
+                        <th class="d-none d-md-table-cell">Assessed By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in recent_records %}
+                    <tr>
+                        <td class="text-nowrap">{{ r.assessed_date|date:"d-m-Y" }}</td>
+                        <td class="text-nowrap">{{ r.statement.area.subject.name }}</td>
+                        <td style="max-width:300px;">
+                            {{ r.statement.statement_text|truncatewords:15 }}
+                        </td>
+                        <td><span class="badge status-{{ r.status }}">{{ r.get_status_display }}</span></td>
+                        <td class="d-none d-md-table-cell text-muted">{{ r.assessed_by.get_full_name|default:"—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <div class="card-body text-center text-muted py-4">
+        <i class="bi bi-clock-history" style="font-size:1.5rem;"></i>
+        <p class="mt-2 mb-0">No assessment records yet.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+
+{% if overall_total > 0 %}
+<!-- Overall doughnut -->
+<script>
+new Chart(document.getElementById('overallDoughnut'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Not Assessed', 'Emerging', 'Developing', 'Secure'],
+        datasets: [{
+            data: [{{ overall_nya }}, {{ overall_emerging }}, {{ overall_developing }}, {{ overall_secure }}],
+            backgroundColor: [
+                getComputedStyle(document.documentElement).getPropertyValue('--rag-nya'),
+                getComputedStyle(document.documentElement).getPropertyValue('--rag-emerging'),
+                getComputedStyle(document.documentElement).getPropertyValue('--rag-developing'),
+                getComputedStyle(document.documentElement).getPropertyValue('--rag-secure'),
+            ],
+        }],
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 14 } },
+            tooltip: {
+                callbacks: {
+                    label: function(ctx) {
+                        const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                        const val = ctx.raw;
+                        const pct = total > 0 ? Math.round(val / total * 100) : 0;
+                        return ctx.label + ': ' + val + ' of ' + total + ' (' + pct + '%)';
+                    },
+                },
+            },
+        },
+    },
+});
+</script>
+{% endif %}
+
+{% if progress_data %}
+<!-- Progress over time line chart -->
+{{ progress_data|json_script:"progress-data" }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const rawData = JSON.parse(document.getElementById('progress-data').textContent);
+    const statusValue = { 'NYA': 0, 'EME': 1, 'DEV': 2, 'SEC': 3 };
+    const statusLabels = ['Not Assessed', 'Emerging', 'Developing', 'Secure'];
+    const colours = [
+        'rgba(54, 162, 235, 0.8)',
+        'rgba(255, 99, 132, 0.8)',
+        'rgba(255, 205, 86, 0.8)',
+        'rgba(75, 192, 192, 0.8)',
+        'rgba(153, 102, 255, 0.8)',
+        'rgba(255, 159, 64, 0.8)',
+    ];
+
+    function formatDate(iso) { const [y,m,d] = iso.split('-'); return d+'-'+m+'-'+y; }
+
+    const allDates = new Set();
+    const datasets = [];
+    let colIdx = 0;
+
+    for (const [subjectName, records] of Object.entries(rawData)) {
+        const dateMap = {};
+        records.forEach(r => {
+            if (!dateMap[r.date]) dateMap[r.date] = [];
+            dateMap[r.date].push(statusValue[r.status] || 0);
+        });
+
+        const dates = Object.keys(dateMap).sort();
+        dates.forEach(d => allDates.add(d));
+
+        let cumulativeTotal = 0, cumulativeCount = 0;
+        let cumCounts = {sec: 0, dev: 0, eme: 0, nya: 0};
+        const valKey = {3: 'sec', 2: 'dev', 1: 'eme', 0: 'nya'};
+        const dataPoints = dates.map(d => {
+            const vals = dateMap[d];
+            vals.forEach(v => { cumulativeTotal += v; cumulativeCount++; cumCounts[valKey[v]]++; });
+            return {
+                x: d,
+                y: parseFloat((cumulativeTotal / cumulativeCount).toFixed(2)),
+                count: cumulativeCount,
+                day: vals.length,
+                sec: cumCounts.sec, dev: cumCounts.dev, eme: cumCounts.eme, nya: cumCounts.nya,
+            };
+        });
+
+        datasets.push({
+            label: subjectName,
+            data: dataPoints,
+            borderColor: colours[colIdx % colours.length],
+            backgroundColor: colours[colIdx % colours.length],
+            tension: 0.3,
+            fill: false,
+        });
+        colIdx++;
+    }
+
+    new Chart(document.getElementById('progressChart'), {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'category',
+                    labels: [...allDates].sort(),
+                    title: { display: true, text: 'Date' },
+                    ticks: { callback: function(value) { return formatDate(this.getLabelForValue(value)); } },
+                },
+                y: {
+                    min: 0, max: 3,
+                    ticks: {
+                        stepSize: 1,
+                        callback: function(value) { return statusLabels[value] || ''; },
+                    },
+                    title: { display: true, text: 'Cumulative Average Status' },
+                },
+            },
+            plugins: {
+                tooltip: {
+                    displayColors: true,
+                    callbacks: {
+                        title: function(items) {
+                            return formatDate(items[0].raw.x);
+                        },
+                        label: function(ctx) {
+                            const p = ctx.raw;
+                            const closest = Math.round(p.y);
+                            return ctx.dataset.label + ': ' + statusLabels[closest] + ' (' + p.y.toFixed(2) + ')';
+                        },
+                        afterLabel: function(ctx) {
+                            const p = ctx.raw;
+                            const lines = [];
+                            lines.push('Based on ' + p.count + ' assessment' + (p.count !== 1 ? 's' : '') + ' to date');
+                            lines.push('  NYA: ' + p.nya + '  Emerging: ' + p.eme);
+                            lines.push('  Developing: ' + p.dev + '  Secure: ' + p.sec);
+                            lines.push(p.day + ' recorded on this date');
+                            return lines;
+                        },
+                    },
+                },
+            },
+        },
+    });
+});
+</script>
+{% endif %}
+{% endblock %}

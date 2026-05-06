@@ -1,0 +1,51 @@
+<!-- Class Progress Widget -->
+{% with areas=widget.extra_context.cp_areas cls=widget.extra_context.cp_class %}
+{% if areas %}
+<style>
+    .cp-mini-bar { height: 8px; border-radius: 4px; overflow: hidden; }
+</style>
+
+{% for ad in areas %}
+<div class="mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="fw-semibold small">{{ ad.name }}</span>
+        <span class="text-muted" style="font-size: 0.7rem;">{{ ad.subject }}</span>
+    </div>
+    <div class="d-flex cp-mini-bar mb-1">
+        {% if ad.pcts.NYA %}
+        <div class="bg-secondary" style="width:{{ ad.pcts.NYA }}%" title="Not Assessed: {{ ad.counts.NYA }}"></div>
+        {% endif %}
+        {% if ad.pcts.EME %}
+        <div class="bg-danger" style="width:{{ ad.pcts.EME }}%" title="Emerging: {{ ad.counts.EME }}"></div>
+        {% endif %}
+        {% if ad.pcts.DEV %}
+        <div class="bg-warning" style="width:{{ ad.pcts.DEV }}%" title="Developing: {{ ad.counts.DEV }}"></div>
+        {% endif %}
+        {% if ad.pcts.SEC %}
+        <div class="bg-success" style="width:{{ ad.pcts.SEC }}%" title="Secure: {{ ad.counts.SEC }}"></div>
+        {% endif %}
+    </div>
+    <div class="d-flex gap-2" style="font-size: 0.7rem;">
+        <span><span class="badge bg-secondary py-0">N</span> {{ ad.counts.NYA }}</span>
+        <span><span class="badge bg-danger py-0">E</span> {{ ad.counts.EME }}</span>
+        <span><span class="badge bg-warning text-dark py-0">D</span> {{ ad.counts.DEV }}</span>
+        <span><span class="badge bg-success py-0">S</span> {{ ad.counts.SEC }}</span>
+    </div>
+</div>
+{% endfor %}
+
+{% if cls %}
+<div class="text-end mt-2">
+    <a href="{% url 'assessments:class_progress' cls.pk %}" class="small text-decoration-none">
+        Full class progress <i class="bi bi-arrow-right"></i>
+    </a>
+</div>
+{% endif %}
+
+{% else %}
+<div class="text-center text-muted py-3">
+    <i class="bi bi-bar-chart-line" style="font-size: 2rem;"></i>
+    <p class="small mb-0 mt-2">No assessment data yet.</p>
+</div>
+{% endif %}
+{% endwith %}

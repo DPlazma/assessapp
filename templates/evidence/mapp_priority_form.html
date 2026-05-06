@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}New MAPP Learning Priority — {{ student.full_name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+    <div>
+        <h4 class="mb-0">
+            <i class="bi bi-plus-lg text-primary me-2"></i>New MAPP Learning Priority
+        </h4>
+        <small class="text-muted">
+            <a href="{% url 'evidence:mapp_overview' student.pk %}" class="text-decoration-none">
+                <i class="bi bi-arrow-left me-1"></i>MAPP Overview
+            </a>
+            &middot; {{ student.full_name }}
+        </small>
+    </div>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="mb-3">
+                <label for="ehcp_target" class="form-label">EHCP Target (Outcome)</label>
+                <select name="ehcp_target" id="ehcp_target" class="form-select">
+                    <option value="">— None —</option>
+                    {% for t in targets %}
+                    <option value="{{ t.pk }}">
+                        {% if t.outcome %}{{ t.outcome.name }}: {% endif %}{{ t.title|truncatechars:80 }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <small class="text-muted">The EHCP target this learning priority relates to</small>
+            </div>
+
+            <div class="mb-3">
+                <label for="title" class="form-label">Learning Priority Description <span class="text-danger">*</span></label>
+                <textarea name="title" id="title" class="form-control" rows="3" required
+                          placeholder="e.g. To willingly and appropriately engage in turn taking sessions, ensuring that he waits for his go and gives the next pupil theirs 3-5 times a week"></textarea>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label for="academic_year" class="form-label">Academic Year</label>
+                    <input type="text" name="academic_year" id="academic_year" class="form-control"
+                           placeholder="e.g. 25/26">
+                </div>
+                <div class="col-md-4">
+                    <label for="term" class="form-label">Term</label>
+                    <select name="term" id="term" class="form-select">
+                        <option value="">— Select —</option>
+                        <option value="Autumn">Autumn</option>
+                        <option value="Spring">Spring</option>
+                        <option value="Summer">Summer</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="ehcp_year" class="form-label">EHCP Year</label>
+                    <input type="text" name="ehcp_year" id="ehcp_year" class="form-control"
+                           placeholder="e.g. 23/24">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Baseline positions -->
+    <div class="card mb-3">
+        <div class="card-header bg-white">
+            <h6 class="mb-0"><i class="bi bi-rulers me-1"></i>Baseline Positions (CSD Scale {{ scale_min }}-{{ scale_max }})</h6>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">
+                Set the baseline (starting) position on the {{ scale_min }}-{{ scale_max }} CSD scale for each dimension.
+                This is where the student was when the priority was first assessed.
+            </p>
+            <div class="row g-3">
+                {% for code, label in dimensions %}
+                <div class="col-md-3 col-6">
+                    <label class="form-label">{{ label }}</label>
+                    <input type="number" name="baseline_{{ code }}" class="form-control"
+                           min="{{ scale_min }}" max="{{ scale_max }}" value="{{ scale_min }}" required>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Create Learning Priority
+        </button>
+        <a href="{% url 'evidence:mapp_overview' student.pk %}" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+{% endblock %}

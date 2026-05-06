@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% load assess_tags %}
+{% block title %}Bulk Assess — AssessApp{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}">My Class</a></li>
+        <li class="breadcrumb-item active">Bulk Assess</li>
+    </ol>
+</nav>
+
+<h5 class="mb-2">{{ class_group.name }}</h5>
+
+{# ── Statement card with navigation ── #}
+<div class="card mb-3">
+    <div class="card-header bg-light d-flex align-items-center justify-content-between">
+        <span class="text-muted small">{{ area.name }}{% if statement.sub_area %} &rsaquo; {{ statement.sub_area.name }}{% endif %}</span>
+        <span class="badge bg-primary">{{ current_idx|add:1 }} / {{ total_statements }}</span>
+    </div>
+    <div class="card-body">
+        <p class="fw-bold mb-2">{{ statement.statement_text }}</p>
+
+        {# Statement picker #}
+        <details class="mb-2">
+            <summary class="text-muted small" style="cursor:pointer;">
+                <i class="bi bi-list-ul me-1"></i>Jump to statement…
+            </summary>
+            <div class="list-group list-group-flush mt-2" style="max-height:200px; overflow-y:auto;">
+                {% for s in all_statements %}
+                <a href="{% url 'assessments:bulk_assess' class_group.pk s.pk %}"
+                   class="list-group-item list-group-item-action small py-1 {% if s.pk == statement.pk %}active{% endif %}">
+                    {% if s.sub_area %}<span class="text-info me-1">{{ s.sub_area.name }} &rsaquo;</span>{% endif %}
+                    {{ s.statement_text|truncatechars:80 }}
+                </a>
+                {% endfor %}
+            </div>
+        </details>
+
+        {# Prev / Next buttons #}
+        <div class="d-flex justify-content-between align-items-center">
+            {% if prev_statement %}
+            <a href="{% url 'assessments:bulk_assess' class_group.pk prev_statement.pk %}"
+               class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-chevron-left me-1"></i>Previous
+            </a>
+            {% else %}
+            <span></span>
+            {% endif %}
+
+            {% if next_statement %}
+            <a href="{% url 'assessments:bulk_assess' class_group.pk next_statement.pk %}"
+               class="btn btn-outline-secondary btn-sm">
+                Next<i class="bi bi-chevron-right ms-1"></i>
+            </a>
+            {% else %}
+            <span class="text-success small"><i class="bi bi-check-circle me-1"></i>Last statement</span>
+            {% endif %}
+        </div>
+    </div>
+    {# Progress bar #}
+    <div class="progress" style="height: 4px; border-radius: 0 0 4px 4px;">
+        <div class="progress-bar" role="progressbar"
+             style="width: {% widthratio current_idx|add:1 total_statements 100 %}%"></div>
+    </div>
+</div>
+
+{% if not can_assess %}
+<div class="alert alert-info">
+    <i class="bi bi-eye me-1"></i>View only — you are not authorised to assess this class.
+</div>
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th class="text-center" style="width:60px;">N</th>
+                    <th class="text-center" style="width:60px;">E</th>
+                    <th class="text-center" style="width:60px;">D</th>
+                    <th class="text-center" style="width:60px;">S</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for student in students %}
+                {% with current_record=student_statuses|get:student.pk %}
+                <tr>
+                    <td>
+                        <strong>{{ student.full_name }}</strong>
+                    </td>
+                    {% for code, label in status_choices %}
+                    <td class="text-center">
+                        {% if can_assess %}
+                        <input type="radio" class="btn-check" name="status_{{ student.pk }}"
+                               id="status_{{ student.pk }}_{{ code }}" value="{{ code }}"
+                               {% if current_record and current_record.status == code %}checked{% endif %}>
+                        <label class="btn status-btn {% if current_record and current_record.status == code %}status-{{ code }}{% else %}btn-outline-secondary{% endif %}"
+                               for="status_{{ student.pk }}_{{ code }}">
+                            {{ label.0 }}
+                        </label>
+                        {% else %}
+                        <span class="status-btn {% if current_record and current_record.status == code %}status-{{ code }}{% else %}btn-outline-secondary{% endif %}">
+                            {{ label.0 }}
+                        </span>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endwith %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if can_assess %}
+    <div class="d-grid">
+        <button type="submit" class="btn btn-primary btn-lg">
+            <i class="bi bi-check-circle me-1"></i>Save {% if next_statement %}&amp; Next{% else %}All{% endif %}
+        </button>
+    </div>
+    {% endif %}
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-highlight selected radio labels
+document.querySelectorAll('.btn-check').forEach(radio => {
+    radio.addEventListener('change', function() {
+        const name = this.name;
+        document.querySelectorAll(`[name="${name}"]`).forEach(r => {
+            const label = document.querySelector(`label[for="${r.id}"]`);
+            if (label) {
+                label.className = 'btn status-btn btn-outline-secondary';
+            }
+        });
+        const label = document.querySelector(`label[for="${this.id}"]`);
+        if (label) {
+            label.className = `btn status-btn status-${this.value}`;
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>{% block title %}AssessApp{% endblock %}</title>
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <style>
+        :root {
+            --rag-secure: #198754;
+            --rag-developing: #fd7e14;
+            --rag-emerging: #dc3545;
+            --rag-nya: #6c757d;
+        }
+
+        body {
+            padding-bottom: 80px; /* Space for bottom nav on mobile */
+        }
+
+        /* RAG Status Colours */
+        .status-SEC { background-color: var(--rag-secure); color: white; }
+        .status-DEV { background-color: var(--rag-developing); color: white; }
+        .status-EME { background-color: var(--rag-emerging); color: white; }
+        .status-NYA { background-color: var(--rag-nya); color: white; }
+
+        /* Collapse chevron rotation */
+        .collapse-icon { transition: transform 0.2s; }
+        [data-bs-toggle="collapse"].collapsed .collapse-icon { transform: rotate(-90deg); }
+        .card-header [data-bs-toggle="collapse"].collapsed .collapse-icon { transform: rotate(-90deg); }
+
+        .status-btn {
+            min-width: 44px;
+            min-height: 44px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .status-btn:active { transform: scale(0.95); }
+        .status-btn.active { box-shadow: 0 0 0 3px rgba(0,0,0,0.3); }
+
+        /* Covering banner */
+        .cover-banner {
+            background: #fff3cd;
+            border-bottom: 2px solid #ffc107;
+            padding: 0.5rem 1rem;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        /* Bottom tab bar for mobile/tablet */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top: 1px solid #dee2e6;
+            z-index: 1050;
+            display: flex;
+            justify-content: space-around;
+            padding: 0.5rem 0;
+            padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+        }
+        .bottom-nav a {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-decoration: none;
+            color: #6c757d;
+            font-size: 0.75rem;
+            padding: 0.25rem;
+        }
+        .bottom-nav a.active { color: #0d6efd; }
+        .bottom-nav a i { font-size: 1.4rem; }
+
+        /* Card tap targets — 44px minimum */
+        .student-card {
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-radius: 10px;
+            text-decoration: none;
+            color: inherit;
+            transition: background 0.15s;
+        }
+        .student-card:hover, .student-card:active {
+            background: #f8f9fa;
+            color: inherit;
+        }
+
+        /* Hide bottom nav on larger screens where sidebar is visible */
+        @media (min-width: 992px) {
+            .bottom-nav { display: none; }
+            body { padding-bottom: 0; }
+        }
+
+        /* Statement row */
+        .statement-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .statement-text { flex: 1; font-size: 0.95rem; }
+
+        .htmx-indicator { display: none; }
+        .htmx-request .htmx-indicator { display: inline; }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+    <!-- Top Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="{% url 'core:dashboard' %}">
+                <i class="bi bi-journal-check me-1"></i>AssessApp
+            </a>
+
+            {% if user.is_authenticated %}
+            <!-- Class selector -->
+            <div class="dropdown me-auto ms-3">
+                <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-people-fill me-1"></i>
+                    {% if current_class %}{{ current_class.name }}{% else %}Select Class{% endif %}
+                </button>
+                <ul class="dropdown-menu">
+                    {% block class_selector %}{% endblock %}
+                </ul>
+            </div>
+
+            <a href="{% url 'evidence:quick_evidence_upload' %}" class="btn btn-warning btn-sm d-none d-lg-inline-block me-2">
+                <i class="bi bi-camera-video me-1"></i>Record Evidence
+            </a>
+            <a href="{% url 'evidence:evidence_gallery_all' %}" class="btn btn-outline-light btn-sm d-none d-lg-inline-block me-2">
+                <i class="bi bi-images me-1"></i>Evidence
+            </a>
+            <a href="{% url 'reports:index' %}" class="btn btn-outline-light btn-sm d-none d-lg-inline-block me-2">
+                <i class="bi bi-bar-chart-line me-1"></i>Reports
+            </a>
+            <a href="{% url 'assessments:framework_hub' %}" class="btn btn-outline-light btn-sm d-none d-lg-inline-block me-2">
+                <i class="bi bi-diagram-3 me-1"></i>Frameworks
+            </a>
+            {% if is_subject_lead %}
+            <a href="{% url 'assessments:my_subjects' %}" class="btn btn-outline-light btn-sm d-none d-lg-inline-block me-2">
+                <i class="bi bi-book me-1"></i>My Subjects
+            </a>
+            {% endif %}
+            {% if is_slt or is_subject_lead %}
+            <a href="{% url 'assessments:school_progress' %}" class="btn btn-outline-light btn-sm d-none d-lg-inline-block me-2">
+                <i class="bi bi-building me-1"></i>School Progress
+            </a>
+            {% endif %}
+            {% if is_slt %}
+            <a href="{% url 'core:setup_hub' %}" class="btn btn-outline-light btn-sm d-none d-lg-inline-block me-2">
+                <i class="bi bi-gear me-1"></i>Setup
+            </a>
+            {% endif %}
+            <!-- Notification Bell -->
+            <div class="dropdown me-2">
+                <button class="btn btn-outline-light btn-sm position-relative"
+                        type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                        hx-get="{% url 'notifications:list' %}"
+                        hx-target="#notification-dropdown"
+                        hx-trigger="click once">
+                    <i class="bi bi-bell"></i>
+                    <span id="notif-badge"
+                          hx-get="{% url 'notifications:unread_count' %}"
+                          hx-trigger="load, notificationsUpdated from:body, every 60s"
+                          hx-swap="innerHTML"></span>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end shadow" style="min-width: 340px; max-height: 420px; overflow-y: auto;"
+                     id="notification-dropdown">
+                    <div class="text-center text-muted py-3">
+                        <div class="spinner-border spinner-border-sm"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex align-items-center">
+                <span class="text-light me-3 d-none d-md-inline">
+                    <i class="bi bi-person-circle me-1"></i>{{ user.get_full_name|default:user.username }}
+                </span>
+                <a href="{% url 'logout' %}" class="btn btn-outline-light btn-sm">Sign out</a>
+            </div>
+            {% endif %}
+        </div>
+    </nav>
+
+    {% block cover_banner %}{% endblock %}
+
+    <!-- Messages -->
+    {% if messages %}
+    <div class="container-fluid mt-2">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Main Content -->
+    <main class="container-fluid py-3">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Bottom Tab Navigation (mobile/tablet) -->
+    {% if user.is_authenticated %}
+    <nav class="bottom-nav d-lg-none">
+        <a href="{% url 'core:dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+            <i class="bi bi-house-fill"></i>
+            <span>My Class</span>
+        </a>
+        <a href="{% url 'evidence:quick_evidence_upload' %}" class="{% if request.resolver_match.url_name == 'quick_evidence_upload' %}active{% endif %}">
+            <i class="bi bi-camera-video-fill"></i>
+            <span>Record</span>
+        </a>
+        <a href="{% url 'evidence:evidence_gallery_all' %}" class="{% if request.resolver_match.url_name == 'evidence_gallery_all' %}active{% endif %}">
+            <i class="bi bi-images"></i>
+            <span>Evidence</span>
+        </a>
+        <a href="{% url 'assessments:framework_hub' %}" class="{% if request.resolver_match.url_name == 'framework_hub' %}active{% endif %}">
+            <i class="bi bi-diagram-3"></i>
+            <span>Frameworks</span>
+        </a>
+        <a href="{% url 'reports:index' %}" class="{% if 'reports' in request.resolver_match.namespace %}active{% endif %}">
+            <i class="bi bi-bar-chart-line"></i>
+            <span>Reports</span>
+        </a>
+    </nav>
+    {% endif %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Chart.js (loaded only when needed) -->
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

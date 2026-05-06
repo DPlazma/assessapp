@@ -1,0 +1,19 @@
+<!-- Currently Covering -->
+{% if covered_classes %}
+<div class="list-group list-group-flush">
+    {% for cls in covered_classes %}
+    <div class="list-group-item px-0 py-2 small d-flex align-items-center">
+        <i class="bi bi-arrow-left-right text-warning me-2"></i>
+        <span>{{ cls.name }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted py-3">
+    <i class="bi bi-arrow-left-right" style="font-size: 2rem;"></i>
+    <p class="small mb-0 mt-2">Not covering any classes.</p>
+    <a href="{% url 'staff:cover_class' %}" class="btn btn-outline-secondary btn-sm mt-2">
+        Cover a class
+    </a>
+</div>
+{% endif %}

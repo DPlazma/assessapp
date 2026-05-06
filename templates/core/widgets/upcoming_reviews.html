@@ -1,0 +1,26 @@
+<!-- Upcoming Reviews -->
+{% with reviews=widget.extra_context.upcoming_reviews %}
+{% if reviews %}
+<div class="list-group list-group-flush">
+    {% for target in reviews %}
+    <div class="list-group-item px-0 py-2 small">
+        <div class="d-flex align-items-start">
+            <i class="bi bi-calendar-event text-warning me-2 mt-1"></i>
+            <div>
+                <strong>{{ target.student.full_name }}</strong><br>
+                <span class="text-muted">{{ target.title|truncatechars:50 }}</span><br>
+                <span class="text-danger fw-semibold">
+                    <i class="bi bi-clock me-1"></i>Due {{ target.review_date|date:"d-m-Y" }}
+                </span>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted py-3">
+    <i class="bi bi-calendar-check" style="font-size: 2rem;"></i>
+    <p class="small mb-0 mt-2">No upcoming reviews in the next 30 days.</p>
+</div>
+{% endif %}
+{% endwith %}

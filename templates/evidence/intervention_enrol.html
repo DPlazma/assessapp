@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}New Intervention — {{ student.full_name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+    <div>
+        <h4 class="mb-0">
+            <i class="bi bi-plus-lg text-primary me-2"></i>New Intervention
+        </h4>
+        <small class="text-muted">
+            <a href="{% url 'evidence:intervention_list' student.pk %}" class="text-decoration-none">
+                <i class="bi bi-arrow-left me-1"></i>Interventions
+            </a>
+            &middot; {{ student.full_name }}
+        </small>
+    </div>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+    <div class="card mb-3">
+        <div class="card-header bg-white">
+            <h6 class="mb-0"><i class="bi bi-clipboard2-pulse me-1"></i>Intervention Details</h6>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label for="program" class="form-label">Intervention Program <span class="text-danger">*</span></label>
+                <select name="program" id="program" class="form-select" required>
+                    <option value="">— Select program —</option>
+                    {% for p in programs %}
+                    <option value="{{ p.pk }}" data-freq="{{ p.default_frequency }}" data-dur="{{ p.default_duration_mins|default:'' }}">
+                        {{ p.name }} ({{ p.get_category_display }})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label for="frequency" class="form-label">Frequency</label>
+                    <input type="text" name="frequency" id="frequency" class="form-control"
+                           placeholder="e.g. 3x per week">
+                </div>
+                <div class="col-md-4">
+                    <label for="duration_mins" class="form-label">Duration (mins)</label>
+                    <input type="number" name="duration_mins" id="duration_mins" class="form-control"
+                           min="1" placeholder="e.g. 20">
+                </div>
+                <div class="col-md-4">
+                    <label for="delivered_by" class="form-label">Delivered By</label>
+                    <select name="delivered_by" id="delivered_by" class="form-select">
+                        <option value="">— Select staff —</option>
+                        {% for s in staff %}
+                        <option value="{{ s.pk }}">{{ s.get_full_name|default:s.username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label for="start_date" class="form-label">Start Date <span class="text-danger">*</span></label>
+                    <input type="date" name="start_date" id="start_date" class="form-control"
+                           value="{{ today }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="end_date" class="form-label">End Date</label>
+                    <input type="date" name="end_date" id="end_date" class="form-control">
+                </div>
+                <div class="col-md-4">
+                    <label for="ehcp_target" class="form-label">Linked EHCP Target</label>
+                    <select name="ehcp_target" id="ehcp_target" class="form-select">
+                        <option value="">— None —</option>
+                        {% for t in targets %}
+                        <option value="{{ t.pk }}">
+                            {% if t.outcome %}{{ t.outcome.name }}: {% endif %}{{ t.title|truncatechars:60 }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="mb-3">
+                <label for="goals" class="form-label">Goals</label>
+                <textarea name="goals" id="goals" class="form-control" rows="3"
+                          placeholder="What this intervention aims to achieve..."></textarea>
+            </div>
+            <div class="mb-3">
+                <label for="notes" class="form-label">Notes</label>
+                <textarea name="notes" id="notes" class="form-control" rows="2"
+                          placeholder="Additional notes..."></textarea>
+            </div>
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Enrol in Intervention
+        </button>
+        <a href="{% url 'evidence:intervention_list' student.pk %}" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-fill frequency and duration when a program is selected
+document.getElementById('program').addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    const freq = opt.dataset.freq;
+    const dur = opt.dataset.dur;
+    if (freq && !document.getElementById('frequency').value) {
+        document.getElementById('frequency').value = freq;
+    }
+    if (dur && !document.getElementById('duration_mins').value) {
+        document.getElementById('duration_mins').value = dur;
+    }
+});
+</script>
+{% endblock %}

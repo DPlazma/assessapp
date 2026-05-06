@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Academic Year Setup — AssessApp{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'core:setup_hub' %}" class="text-decoration-none">
+        <i class="bi bi-arrow-left me-1"></i>Back to Setup
+    </a>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-calendar3 me-2"></i>Academic Year Setup</h4>
+    <a href="{% url 'core:create_academic_year' %}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-lg me-1"></i>New Academic Year
+    </a>
+</div>
+
+{% if years %}
+{% for ay in years %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+            <strong>{{ ay.name }}</strong>
+            {% if ay.is_current %}<span class="badge bg-success ms-2">Current</span>{% endif %}
+            <span class="text-muted ms-2" style="font-size:0.85rem;">
+                {{ ay.start_date|date:"d-m-Y" }} – {{ ay.end_date|date:"d-m-Y" }}
+            </span>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'core:edit_academic_year' ay.pk %}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-pencil me-1"></i>Edit
+            </a>
+            <form method="post" action="{% url 'core:delete_academic_year' ay.pk %}"
+                  onsubmit="return confirm('Delete {{ ay.name }} and all its terms?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-danger btn-sm">
+                    <i class="bi bi-trash me-1"></i>Delete
+                </button>
+            </form>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if ay.terms.all %}
+        <div class="row g-3">
+            {% for term in ay.terms.all %}
+            <div class="col-md-4">
+                <div class="border rounded p-2">
+                    <strong>{{ term.get_name_display }}</strong><br>
+                    <span class="text-muted" style="font-size:0.85rem;">
+                        {{ term.start_date|date:"d-m-Y" }} – {{ term.end_date|date:"d-m-Y" }}
+                    </span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted mb-0"><i class="bi bi-info-circle me-1"></i>No terms set up yet. Click Edit to add term dates.</p>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-calendar-plus" style="font-size: 2rem;"></i>
+    <p class="mt-2">No academic years set up yet.</p>
+    <a href="{% url 'core:create_academic_year' %}" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>Create Your First Academic Year
+    </a>
+</div>
+{% endif %}
+
+<div class="card mt-4">
+    <div class="card-header"><strong><i class="bi bi-arrow-repeat me-1"></i>Sync from Arbor</strong></div>
+    <div class="card-body">
+        <p class="text-muted mb-2">
+            Automatically import academic year and term dates from Arbor MIS.
+        </p>
+        <a href="{% url 'core:sync_academic_years_from_arbor' %}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-cloud-download me-1"></i>Sync from Arbor
+        </a>
+    </div>
+</div>
+{% endblock %}

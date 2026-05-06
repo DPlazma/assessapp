@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{% if editing %}Edit{% else %}New{% endif %} Area — AssessApp{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'assessments:framework_hub' %}">Frameworks</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'assessments:framework_detail' framework.pk %}">{{ framework.name }}</a></li>
+        <li class="breadcrumb-item active">{% if editing %}Edit{% else %}New{% endif %} Area</li>
+    </ol>
+</nav>
+
+<h5 class="mb-1">{% if editing %}Edit Area{% else %}Create New Area{% endif %}</h5>
+<p class="text-muted small">Framework: <strong>{{ framework.name }}</strong></p>
+
+<div class="card">
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="name" class="form-label">Area Name <span class="text-danger">*</span></label>
+                <input type="text" name="name" id="name" class="form-control"
+                       value="{% if editing %}{{ area.name }}{% endif %}"
+                       placeholder="e.g. Reading — Year 3, Number — Phase 1"
+                       required>
+            </div>
+
+            <div class="mb-3">
+                <label for="subject" class="form-label">Subject <span class="text-danger">*</span></label>
+                <select name="subject" id="subject" class="form-select">
+                    <option value="">Choose an existing subject…</option>
+                    {% for s in subjects %}
+                    <option value="{{ s.pk }}" {% if editing and area.subject_id == s.pk %}selected{% endif %}>
+                        {{ s.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">Or create a new subject below:</div>
+            </div>
+
+            <div class="mb-3">
+                <label for="new_subject_name" class="form-label">New Subject Name <small class="text-muted">(leave blank to use existing)</small></label>
+                <input type="text" name="new_subject_name" id="new_subject_name" class="form-control"
+                       placeholder="e.g. Art & Design, Music">
+                <div class="form-text">If filled, this creates a new subject and overrides the selection above.</div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-6">
+                    <label for="year_group" class="form-label">Year Group <small class="text-muted">(optional)</small></label>
+                    <input type="number" name="year_group" id="year_group" class="form-control"
+                           value="{% if editing and area.year_group %}{{ area.year_group }}{% endif %}"
+                           min="1" max="14" placeholder="e.g. 7">
+                </div>
+                <div class="col-6">
+                    <label for="phase" class="form-label">Phase <small class="text-muted">(optional)</small></label>
+                    <select name="phase" id="phase" class="form-select">
+                        <option value="">Not phase-specific</option>
+                        <option value="1" {% if editing and area.phase == 1 %}selected{% endif %}>Phase 1</option>
+                        <option value="2" {% if editing and area.phase == 2 %}selected{% endif %}>Phase 2</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle me-1"></i>{% if editing %}Save Changes{% else %}Create Area{% endif %}
+                </button>
+                <a href="{% url 'assessments:framework_detail' framework.pk %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Clear subject dropdown when typing a new subject name, and vice versa
+document.getElementById('new_subject_name').addEventListener('input', function() {
+    if (this.value.trim()) {
+        document.getElementById('subject').value = '';
+    }
+});
+document.getElementById('subject').addEventListener('change', function() {
+    if (this.value) {
+        document.getElementById('new_subject_name').value = '';
+    }
+});
+</script>
+{% endblock %}

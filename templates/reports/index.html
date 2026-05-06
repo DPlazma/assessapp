@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Reports — AssessApp{% endblock %}
+
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-bar-chart-line me-2"></i>Reports</h4>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <a href="{% url 'reports:cohort_report' %}" class="card text-decoration-none h-100">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-grid-3x3 me-2 text-primary"></i>Cohort Report</h5>
+                <p class="card-text text-muted">
+                    Grid view of students against assessment statements.
+                    See RAG status for every student at a glance.
+                </p>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-6">
+        <a href="{% url 'reports:subject_progress' %}" class="card text-decoration-none h-100">
+            <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-pie-chart me-2 text-primary"></i>Subject Progress</h5>
+                <p class="card-text text-muted">
+                    Summary of student progress per subject — percentage at
+                    Secure, Developing, Emerging and NYA.
+                </p>
+            </div>
+        </a>
+    </div>
+</div>
+{% endblock %}

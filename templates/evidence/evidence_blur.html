@@ -1,0 +1,413 @@
+{% extends "base.html" %}
+{% block title %}Blur Faces — {{ item.title }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'evidence:evidence_detail' item.pk %}" class="text-decoration-none">
+        <i class="bi bi-arrow-left me-1"></i>Back to evidence
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-person-bounding-box me-2"></i>Face Blur</h5>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="btn-add-box"
+                        title="Draw a new blur box">
+                    <i class="bi bi-plus-square me-1"></i>Add Box
+                </button>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-2">
+                    <strong id="face-count">{{ face_count }}</strong> face{{ face_count|pluralize }} detected.
+                    <strong class="text-danger">Red</strong> boxes will be blurred,
+                    <strong class="text-success">green</strong> boxes are kept.
+                    Tap a box to toggle. Drag to move. Drag corners to resize. Press <kbd>&times;</kbd> to delete.
+                </p>
+
+                <div class="position-relative d-inline-block" id="blur-container"
+                     style="max-width: 100%; user-select: none;">
+                    <canvas id="blur-canvas" style="max-width: 100%; cursor: crosshair;"></canvas>
+                </div>
+
+                <div class="mt-3 d-flex flex-wrap gap-2" id="face-legend"></div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <form method="post" action="{% url 'evidence:evidence_apply_blur' item.pk %}" id="blur-form">
+            {% csrf_token %}
+            <input type="hidden" name="faces_json" id="faces-json" value="">
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary" id="btn-apply">
+                    <i class="bi bi-check-circle me-1"></i>Apply Blur &amp; Save
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="btn-blur-all">
+                    <i class="bi bi-eye-slash me-1"></i>Blur All Faces
+                </button>
+                <a href="{% url 'evidence:evidence_detail' item.pk %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-x me-1"></i>Skip Blur
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-info-circle me-1"></i>How it works</h6>
+            </div>
+            <div class="card-body small">
+                <ol class="mb-0">
+                    <li class="mb-2">Faces are highlighted with <span class="text-danger fw-bold">red</span> boxes (will be blurred)</li>
+                    <li class="mb-2"><strong>Tap a box</strong> to mark it as the student — it turns <span class="text-success fw-bold">green</span> (kept clear)</li>
+                    <li class="mb-2"><strong>Drag</strong> a box to reposition it</li>
+                    <li class="mb-2"><strong>Drag the corners</strong> to resize</li>
+                    <li class="mb-2">Press the <strong>&times;</strong> button to delete a box</li>
+                    <li class="mb-2">Click <strong>Add Box</strong> then draw on the image to add a new blur area</li>
+                    <li class="mb-2">Click <strong>Apply Blur &amp; Save</strong> when ready</li>
+                </ol>
+                <hr>
+                <p class="mb-0 text-muted">
+                    For freehand areas, use the
+                    <a href="{% url 'evidence:evidence_manual_blur' item.pk %}">Manual Blur Brush</a>
+                    after saving.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    /* ── State ─────────────────────────────────────────────── */
+    // Each face: {x, y, w, h, keep: bool}  — coords in ORIGINAL image px
+    let faces = ({{ faces|safe }}).map(f => ({...f, keep: false}));
+    const canvas  = document.getElementById('blur-canvas');
+    const ctx     = canvas.getContext('2d');
+    const form    = document.getElementById('blur-form');
+    const legend  = document.getElementById('face-legend');
+    const faceCountEl = document.getElementById('face-count');
+
+    let scale = 1;            // canvas px  →  image px
+    const HANDLE = 10;        // corner-handle radius (canvas px)
+
+    /* interaction modes */
+    let mode = 'idle';        // idle | drag | resize | draw
+    let activeIdx = -1;       // which face is being dragged/resized
+    let activeCorner = '';     // 'tl' | 'tr' | 'bl' | 'br'
+    let dragStart = null;     // {cx, cy, ox, oy, ow, oh}
+    let drawStart = null;     // {cx, cy} anchor for new box
+    let drawingMode = false;  // "Add Box" toggled on?
+    let hasDragged = false;   // did pointer move since mousedown?
+
+    /* ── Image load ────────────────────────────────────────── */
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+        const container = document.getElementById('blur-container');
+        const maxW = container.offsetWidth || 800;
+        scale = Math.min(1, maxW / img.width);
+        canvas.width  = img.width  * scale;
+        canvas.height = img.height * scale;
+        drawAll();
+    };
+    img.src = '{{ item.file.url }}';
+
+    /* ── Drawing ───────────────────────────────────────────── */
+    function drawAll() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        faces.forEach((f, i) => {
+            const x = f.x * scale, y = f.y * scale;
+            const w = f.w * scale, h = f.h * scale;
+            const kept = f.keep;
+
+            // Box outline
+            ctx.strokeStyle = kept ? '#198754' : '#dc3545';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x, y, w, h);
+
+            // Semi-transparent fill for blur targets
+            if (!kept) {
+                ctx.fillStyle = 'rgba(220, 53, 69, 0.15)';
+                ctx.fillRect(x, y, w, h);
+            }
+
+            // Label
+            ctx.fillStyle = kept ? '#198754' : '#dc3545';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.textAlign = 'start';
+            ctx.fillText(kept ? '✓ Keep' : '✗ Blur', x + 4, y - 6);
+
+            // Number badge
+            const numBg = kept ? '#198754' : '#dc3545';
+            const numS = 22;
+            ctx.fillStyle = numBg;
+            ctx.fillRect(x + w - numS, y, numS, numS);
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.fillText(String(i + 1), x + w - numS / 2, y + 15);
+            ctx.textAlign = 'start';
+
+            // Delete button (top-right, outside box)
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(x + w + 2, y, 20, 20);
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('×', x + w + 12, y + 15);
+            ctx.textAlign = 'start';
+
+            // Resize handles (4 corners)
+            const corners = [
+                [x, y], [x + w, y], [x, y + h], [x + w, y + h]
+            ];
+            corners.forEach(([cx, cy]) => {
+                ctx.fillStyle = 'white';
+                ctx.strokeStyle = kept ? '#198754' : '#dc3545';
+                ctx.lineWidth = 2;
+                ctx.fillRect(cx - HANDLE/2, cy - HANDLE/2, HANDLE, HANDLE);
+                ctx.strokeRect(cx - HANDLE/2, cy - HANDLE/2, HANDLE, HANDLE);
+            });
+        });
+
+        // Draw-mode preview cursor
+        if (drawingMode) {
+            canvas.style.cursor = 'crosshair';
+        } else {
+            canvas.style.cursor = 'default';
+        }
+
+        syncForm();
+        updateLegend();
+    }
+
+    /* ── Form sync ─────────────────────────────────────────── */
+    function syncForm() {
+        // Send final face list as JSON (original image coords + keep flag)
+        document.getElementById('faces-json').value = JSON.stringify(faces);
+        faceCountEl.textContent = faces.length;
+    }
+
+    function updateLegend() {
+        legend.innerHTML = '';
+        faces.forEach((f, i) => {
+            const badge = document.createElement('span');
+            badge.className = 'badge ' + (f.keep ? 'bg-success' : 'bg-danger') + ' fs-6';
+            badge.style.cursor = 'pointer';
+            badge.textContent = 'Face ' + (i + 1) + ': ' + (f.keep ? 'Keep' : 'Blur');
+            badge.onclick = () => { f.keep = !f.keep; drawAll(); };
+            legend.appendChild(badge);
+        });
+    }
+
+    /* ── Hit-testing ───────────────────────────────────────── */
+    function canvasXY(e) {
+        const rect = canvas.getBoundingClientRect();
+        const t = e.touches ? e.touches[0] || e.changedTouches[0] : e;
+        return { cx: t.clientX - rect.left, cy: t.clientY - rect.top };
+    }
+
+    function hitDeleteBtn(cx, cy) {
+        for (let i = faces.length - 1; i >= 0; i--) {
+            const f = faces[i];
+            const bx = f.x * scale + f.w * scale + 2;
+            const by = f.y * scale;
+            if (cx >= bx && cx <= bx + 20 && cy >= by && cy <= by + 20) return i;
+        }
+        return -1;
+    }
+
+    function hitCorner(cx, cy) {
+        for (let i = faces.length - 1; i >= 0; i--) {
+            const f = faces[i];
+            const fx = f.x * scale, fy = f.y * scale;
+            const fw = f.w * scale, fh = f.h * scale;
+            const corners = [
+                { id: 'tl', x: fx,      y: fy },
+                { id: 'tr', x: fx + fw, y: fy },
+                { id: 'bl', x: fx,      y: fy + fh },
+                { id: 'br', x: fx + fw, y: fy + fh },
+            ];
+            for (const c of corners) {
+                if (Math.abs(cx - c.x) <= HANDLE && Math.abs(cy - c.y) <= HANDLE) {
+                    return { idx: i, corner: c.id };
+                }
+            }
+        }
+        return null;
+    }
+
+    function hitBox(cx, cy) {
+        for (let i = faces.length - 1; i >= 0; i--) {
+            const f = faces[i];
+            const fx = f.x * scale, fy = f.y * scale;
+            const fw = f.w * scale, fh = f.h * scale;
+            if (cx >= fx && cx <= fx + fw && cy >= fy && cy <= fy + fh) return i;
+        }
+        return -1;
+    }
+
+    /* ── Pointer events ────────────────────────────────────── */
+    function onDown(e) {
+        e.preventDefault();
+        const { cx, cy } = canvasXY(e);
+        hasDragged = false;
+
+        // Delete button?
+        const delIdx = hitDeleteBtn(cx, cy);
+        if (delIdx >= 0) {
+            faces.splice(delIdx, 1);
+            drawAll();
+            return;
+        }
+
+        // Drawing new box?
+        if (drawingMode) {
+            mode = 'draw';
+            drawStart = { cx, cy };
+            return;
+        }
+
+        // Corner resize?
+        const corner = hitCorner(cx, cy);
+        if (corner) {
+            mode = 'resize';
+            activeIdx = corner.idx;
+            activeCorner = corner.corner;
+            const f = faces[activeIdx];
+            dragStart = { cx, cy, ox: f.x, oy: f.y, ow: f.w, oh: f.h };
+            return;
+        }
+
+        // Drag box?
+        const boxIdx = hitBox(cx, cy);
+        if (boxIdx >= 0) {
+            mode = 'drag';
+            activeIdx = boxIdx;
+            const f = faces[activeIdx];
+            dragStart = { cx, cy, ox: f.x, oy: f.y, ow: f.w, oh: f.h };
+            return;
+        }
+    }
+
+    function onMove(e) {
+        if (mode === 'idle') return;
+        e.preventDefault();
+        const { cx, cy } = canvasXY(e);
+
+        if (Math.abs(cx - (dragStart || drawStart || {cx}).cx) > 3 ||
+            Math.abs(cy - (dragStart || drawStart || {cy}).cy) > 3) {
+            hasDragged = true;
+        }
+
+        if (mode === 'drag') {
+            const f = faces[activeIdx];
+            const dx = (cx - dragStart.cx) / scale;
+            const dy = (cy - dragStart.cy) / scale;
+            f.x = Math.max(0, Math.round(dragStart.ox + dx));
+            f.y = Math.max(0, Math.round(dragStart.oy + dy));
+            drawAll();
+        }
+        else if (mode === 'resize') {
+            const f = faces[activeIdx];
+            const dx = (cx - dragStart.cx) / scale;
+            const dy = (cy - dragStart.cy) / scale;
+            const { ox, oy, ow, oh } = dragStart;
+
+            if (activeCorner === 'br') {
+                f.w = Math.max(20, Math.round(ow + dx));
+                f.h = Math.max(20, Math.round(oh + dy));
+            } else if (activeCorner === 'bl') {
+                f.x = Math.round(ox + dx);
+                f.w = Math.max(20, Math.round(ow - dx));
+                f.h = Math.max(20, Math.round(oh + dy));
+            } else if (activeCorner === 'tr') {
+                f.w = Math.max(20, Math.round(ow + dx));
+                f.y = Math.round(oy + dy);
+                f.h = Math.max(20, Math.round(oh - dy));
+            } else if (activeCorner === 'tl') {
+                f.x = Math.round(ox + dx);
+                f.w = Math.max(20, Math.round(ow - dx));
+                f.y = Math.round(oy + dy);
+                f.h = Math.max(20, Math.round(oh - dy));
+            }
+            drawAll();
+        }
+        else if (mode === 'draw' && drawStart) {
+            // Preview the new box while drawing
+            drawAll();
+            const x = Math.min(drawStart.cx, cx);
+            const y = Math.min(drawStart.cy, cy);
+            const w = Math.abs(cx - drawStart.cx);
+            const h = Math.abs(cy - drawStart.cy);
+            ctx.strokeStyle = '#dc3545';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 3]);
+            ctx.strokeRect(x, y, w, h);
+            ctx.setLineDash([]);
+        }
+    }
+
+    function onUp(e) {
+        if (mode === 'draw' && drawStart) {
+            const { cx, cy } = canvasXY(e);
+            const x1 = Math.min(drawStart.cx, cx) / scale;
+            const y1 = Math.min(drawStart.cy, cy) / scale;
+            const w  = Math.abs(cx - drawStart.cx) / scale;
+            const h  = Math.abs(cy - drawStart.cy) / scale;
+            if (w > 10 && h > 10) {
+                faces.push({
+                    x: Math.round(x1), y: Math.round(y1),
+                    w: Math.round(w),  h: Math.round(h),
+                    keep: false
+                });
+            }
+            drawingMode = false;
+            document.getElementById('btn-add-box').classList.remove('active');
+            drawAll();
+        }
+        else if (mode === 'drag' && !hasDragged) {
+            // Click without drag = toggle keep
+            faces[activeIdx].keep = !faces[activeIdx].keep;
+            drawAll();
+        }
+
+        mode = 'idle';
+        activeIdx = -1;
+        dragStart = null;
+        drawStart = null;
+        drawAll();
+    }
+
+    canvas.addEventListener('mousedown',  onDown);
+    canvas.addEventListener('mousemove',  onMove);
+    canvas.addEventListener('mouseup',    onUp);
+    canvas.addEventListener('touchstart', onDown, {passive: false});
+    canvas.addEventListener('touchmove',  onMove, {passive: false});
+    canvas.addEventListener('touchend',   onUp,   {passive: false});
+
+    /* ── Add Box button ────────────────────────────────────── */
+    document.getElementById('btn-add-box').addEventListener('click', function() {
+        drawingMode = !drawingMode;
+        this.classList.toggle('active', drawingMode);
+        drawAll();
+    });
+
+    /* ── Blur All button ───────────────────────────────────── */
+    document.getElementById('btn-blur-all').addEventListener('click', function() {
+        faces.forEach(f => f.keep = false);
+        drawAll();
+    });
+
+    /* ── Sync before submit ────────────────────────────────── */
+    form.addEventListener('submit', function() {
+        syncForm();
+    });
+})();
+</script>
+{% endblock %}

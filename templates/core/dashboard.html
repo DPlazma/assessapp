@@ -1,0 +1,417 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — AssessApp{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ── CSS Grid dashboard ─────────────────────────────────────── */
+    #widget-grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: 1fr;
+        grid-auto-flow: dense;
+    }
+    @media (min-width: 768px) {
+        #widget-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 1200px) {
+        #widget-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    /* Size classes — sm=1col, md=2col, lg=full row */
+    .widget-size-sm { grid-column: span 1; }
+    .widget-size-lg { grid-column: 1 / -1; }
+
+    @media (min-width: 768px) {
+        .widget-size-md { grid-column: span 2; }
+    }
+    @media (min-width: 1200px) {
+        .widget-size-md { grid-column: span 2; }
+    }
+
+    /* ── Welcome header ─────────────────────────────────────────── */
+    .welcome-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 16px;
+        padding: 1.5rem 2rem;
+        margin-bottom: 1.25rem;
+        border: 1px solid #dee2e6;
+    }
+    .welcome-header h3 {
+        margin: 0;
+        font-weight: 700;
+        color: #212529;
+    }
+    .welcome-header .role-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+    }
+
+    /* ── Widget card chrome ─────────────────────────────────────── */
+    .widget-card {
+        border-radius: 12px;
+        border: 1px solid #e9ecef;
+        transition: box-shadow 0.15s;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        border-left: 3px solid var(--widget-border-colour, #e9ecef);
+    }
+    .widget-card:hover {
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    .widget-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f0f0f0;
+        background: #fafbfc;
+        border-radius: 0 12px 0 0;
+        flex-shrink: 0;
+    }
+    .widget-header h6 {
+        margin: 0;
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #6c757d;
+        letter-spacing: 0.03em;
+    }
+    .widget-body {
+        padding: 1rem;
+        flex: 1;
+        overflow: auto;
+    }
+
+    /* Frameless (class_overview, school_overview) */
+    .widget-frameless .widget-header {
+        background: transparent;
+        border-bottom: none;
+        padding: 0 0 0.5rem 0;
+    }
+    .widget-frameless {
+        border: none;
+        border-left: none;
+        box-shadow: none !important;
+    }
+
+    /* ── Gallery offcanvas ──────────────────────────────────────── */
+    .gallery-widget-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .gallery-widget-item:last-child { border-bottom: none; }
+
+    /* ── Header controls ────────────────────────────────────────── */
+    .widget-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    .resize-btn {
+        border: none;
+        background: none;
+        color: #adb5bd;
+        cursor: pointer;
+        padding: 2px 4px;
+        font-size: 0.85rem;
+        line-height: 1;
+        border-radius: 4px;
+        transition: color 0.15s, background 0.15s;
+    }
+    .resize-btn:hover {
+        color: #0d6efd;
+        background: #e9ecef;
+    }
+    .drag-handle {
+        cursor: grab;
+        color: #adb5bd;
+        font-size: 1.1rem;
+    }
+    .drag-handle:active { cursor: grabbing; }
+
+    .widget-grid-item.dragging { opacity: 0.4; }
+    .widget-grid-item.drag-over { outline: 2px dashed #0d6efd; outline-offset: -2px; border-radius: 12px; }
+
+    /* Smooth size transition */
+    .widget-grid-item {
+        transition: grid-column 0.2s ease;
+    }
+
+    /* ── Category colour dots in gallery ────────────────────────── */
+    .cat-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 6px;
+        flex-shrink: 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Welcome header -->
+<div class="welcome-header">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+            <h3>{{ greeting }}, {{ first_name }}</h3>
+            <div class="text-muted small mt-1">
+                <i class="bi bi-calendar3 me-1"></i>{{ today|date:"l, d-m-Y" }}
+                {% if active_class %}
+                    <span class="mx-2">&middot;</span>
+                    <i class="bi bi-people me-1"></i>{{ active_class.name }}
+                {% endif %}
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="role-badge
+                {% if role_group == 'slt' %}bg-primary text-white
+                {% elif role_group == 'lead' %}bg-success text-white
+                {% else %}bg-secondary bg-opacity-25 text-dark{% endif %}">
+                {{ role_display }}
+            </span>
+            <button class="btn btn-outline-secondary btn-sm" type="button"
+                    data-bs-toggle="offcanvas" data-bs-target="#widgetGallery">
+                <i class="bi bi-grid-3x3-gap me-1"></i>Customise
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Widget grid — ALL widgets rendered, hidden ones get d-none -->
+<div id="widget-grid">
+    {% for widget in widgets %}
+    <div class="widget-grid-item widget-size-{{ widget.current_size }}{% if not widget.visible %} d-none{% endif %}"
+         data-widget-id="{{ widget.id }}"
+         data-size="{{ widget.current_size }}"
+         data-min-size="{{ widget.min_size }}"
+         data-max-size="{{ widget.max_size }}"
+         draggable="true">
+        <div class="widget-card {% if widget.id == 'class_overview' or widget.id == 'school_overview' %}widget-frameless{% endif %}"
+             style="--widget-border-colour: {{ widget.border_colour }};">
+            <div class="widget-header">
+                <h6>
+                    <i class="bi {{ widget.icon }} me-1"></i>
+                    {{ widget.title }}
+                </h6>
+                <div class="widget-controls">
+                    {% if widget.can_resize %}
+                    <button class="resize-btn d-none d-lg-inline-block"
+                            title="Resize ({{ widget.min_size }} – {{ widget.max_size }})"
+                            data-widget-id="{{ widget.id }}">
+                        <i class="bi bi-arrows-angle-expand"></i>
+                    </button>
+                    {% endif %}
+                    <span class="drag-handle d-none d-lg-inline" title="Drag to reorder">
+                        <i class="bi bi-grip-vertical"></i>
+                    </span>
+                </div>
+            </div>
+            <div class="widget-body">
+                {% include widget.template %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Widget Gallery Offcanvas -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="widgetGallery">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title">
+            <i class="bi bi-grid-3x3-gap me-2"></i>Widget Gallery
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body p-0">
+        <div class="p-3 border-bottom bg-light small text-muted">
+            Toggle widgets on or off. Drag to reorder on the dashboard. Changes save automatically.
+        </div>
+        <div id="gallery-list">
+            {% for widget in widgets %}
+            <div class="gallery-widget-item" data-widget-id="{{ widget.id }}">
+                <div class="d-flex align-items-center">
+                    <span class="cat-dot" style="background: {{ widget.border_colour }};"></span>
+                    <i class="bi {{ widget.icon }} me-3 text-primary" style="font-size: 1.2rem;"></i>
+                    <div>
+                        <strong>{{ widget.title }}</strong>
+                        <div class="small text-muted">{{ widget.description }}</div>
+                    </div>
+                </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input widget-toggle"
+                           type="checkbox"
+                           id="toggle-{{ widget.id }}"
+                           data-widget-id="{{ widget.id }}"
+                           {% if widget.visible %}checked{% endif %}>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="p-3 border-top">
+            <button class="btn btn-outline-danger btn-sm w-100" id="reset-layout-btn">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>Reset to Defaults
+            </button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+                    || '{{ csrf_token }}';
+    var grid = document.getElementById('widget-grid');
+    var SIZES = ['sm', 'md', 'lg'];
+
+    // ── Toggle widget visibility (no page reload) ──────────────────
+    document.querySelectorAll('.widget-toggle').forEach(function(toggle) {
+        toggle.addEventListener('change', function() {
+            var widgetId = this.dataset.widgetId;
+            var gridItem = grid.querySelector('.widget-grid-item[data-widget-id="' + widgetId + '"]');
+            if (gridItem) {
+                gridItem.classList.toggle('d-none');
+            }
+            fetch('{% url "core:toggle_widget" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: 'widget_id=' + encodeURIComponent(widgetId),
+            });
+        });
+    });
+
+    // ── Resize widgets ─────────────────────────────────────────────
+    document.querySelectorAll('.resize-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            var widgetId = this.dataset.widgetId;
+            var item = grid.querySelector('.widget-grid-item[data-widget-id="' + widgetId + '"]');
+            if (!item) return;
+
+            var minSize = item.dataset.minSize;
+            var maxSize = item.dataset.maxSize;
+            var curSize = item.dataset.size;
+
+            var minIdx = SIZES.indexOf(minSize);
+            var maxIdx = SIZES.indexOf(maxSize);
+            var curIdx = SIZES.indexOf(curSize);
+            var allowed = SIZES.slice(minIdx, maxIdx + 1);
+            var nextIdx = (allowed.indexOf(curSize) + 1) % allowed.length;
+            var newSize = allowed[nextIdx];
+
+            // Swap CSS class
+            item.classList.remove('widget-size-sm', 'widget-size-md', 'widget-size-lg');
+            item.classList.add('widget-size-' + newSize);
+            item.dataset.size = newSize;
+
+            // Update icon to hint direction
+            var icon = this.querySelector('i');
+            if (newSize === maxSize) {
+                icon.className = 'bi bi-arrows-angle-contract';
+            } else {
+                icon.className = 'bi bi-arrows-angle-expand';
+            }
+
+            // Persist
+            fetch('{% url "core:resize_widget" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: 'widget_id=' + encodeURIComponent(widgetId),
+            });
+        });
+    });
+
+    // ── Reset to defaults ──────────────────────────────────────────
+    var resetBtn = document.getElementById('reset-layout-btn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function() {
+            fetch('{% url "core:reset_widget_layout" %}', {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrfToken },
+            }).then(function() {
+                window.location.reload();
+            });
+        });
+    }
+
+    // ── Drag-and-drop reordering ───────────────────────────────────
+    var dragSrc = null;
+
+    grid.querySelectorAll('.widget-grid-item').forEach(function(item) {
+        item.addEventListener('dragstart', function(e) {
+            dragSrc = this;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', this.dataset.widgetId);
+        });
+
+        item.addEventListener('dragend', function() {
+            this.classList.remove('dragging');
+            grid.querySelectorAll('.widget-grid-item').forEach(function(el) {
+                el.classList.remove('drag-over');
+            });
+        });
+
+        item.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            this.classList.add('drag-over');
+        });
+
+        item.addEventListener('dragleave', function() {
+            this.classList.remove('drag-over');
+        });
+
+        item.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('drag-over');
+            if (dragSrc !== this) {
+                var allItems = Array.from(grid.querySelectorAll('.widget-grid-item'));
+                var fromIdx = allItems.indexOf(dragSrc);
+                var toIdx = allItems.indexOf(this);
+                if (fromIdx < toIdx) {
+                    grid.insertBefore(dragSrc, this.nextSibling);
+                } else {
+                    grid.insertBefore(dragSrc, this);
+                }
+                saveLayout();
+            }
+        });
+    });
+
+    function saveLayout() {
+        var items = grid.querySelectorAll('.widget-grid-item');
+        var layout = [];
+        items.forEach(function(el) {
+            layout.push({
+                widget_id: el.dataset.widgetId,
+                visible: !el.classList.contains('d-none'),
+                size: el.dataset.size || 'sm',
+            });
+        });
+        fetch('{% url "core:save_widget_layout" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+            },
+            body: JSON.stringify({ layout: layout }),
+        });
+    }
+})();
+</script>
+{% endblock %}

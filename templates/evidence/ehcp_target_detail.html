@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}{{ target.title|truncatechars:40 }} — {{ target.student.full_name }}{% endblock %}
+
+{% block content %}
+{% include "students/_student_nav.html" with student_nav="ehcp" %}
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Target Header -->
+        <div class="d-flex align-items-start justify-content-between mb-3">
+            <div>
+                <h5 class="mb-1">{{ target.title }}</h5>
+                <div class="text-muted small">
+                    {% if target.outcome %}{{ target.outcome.name }}{% endif %}
+                </div>
+            </div>
+            <div class="d-flex gap-1">
+                <a href="{% url 'evidence:small_steps_manage' target.pk %}"
+                   class="btn btn-success btn-sm">
+                    <i class="bi bi-signpost-split me-1"></i>Small Steps
+                </a>
+                <a href="{% url 'evidence:ehcp_target_review' target.pk %}"
+                   class="btn btn-primary btn-sm">
+                    <i class="bi bi-chat-left-text me-1"></i>Review
+                </a>
+                <a href="{% url 'evidence:ehcp_target_edit' target.pk %}"
+                   class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-pencil me-1"></i>Edit
+                </a>
+            </div>
+        </div>
+
+        <!-- Status & Dates -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col">
+                        <span class="badge fs-6
+                            {% if target.status == 'MET' or target.status == 'EXCEEDED' %}bg-success
+                            {% elif target.status == 'IN_PROGRESS' %}bg-primary
+                            {% elif target.status == 'PARTIALLY_MET' %}bg-warning text-dark
+                            {% else %}bg-secondary
+                            {% endif %}">
+                            {{ target.get_status_display }}
+                        </span>
+                    </div>
+                    <div class="col">
+                        <small class="text-muted d-block">Set</small>
+                        <strong>{{ target.set_date|date:"d-m-Y" }}</strong>
+                    </div>
+                    <div class="col">
+                        <small class="text-muted d-block">Review</small>
+                        <strong>{{ target.review_date|date:"d-m-Y"|default:"—" }}</strong>
+                    </div>
+                    <div class="col">
+                        <small class="text-muted d-block">Met</small>
+                        <strong>{{ target.met_date|date:"d-m-Y"|default:"—" }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if target.description %}
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="card-title text-muted small text-uppercase">Description</h6>
+                <p class="mb-0">{{ target.description }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- ── Unified Progress Timeline ────────────────────────── -->
+        <div class="card mb-3">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><i class="bi bi-clock-history me-1"></i>Progress Timeline</h6>
+                <div class="d-flex gap-1">
+                    <a href="{% url 'evidence:evidence_upload' student.pk %}?target={{ target.pk }}"
+                       class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-camera me-1"></i>Add Evidence
+                    </a>
+                    <a href="{% url 'evidence:ehcp_target_review' target.pk %}"
+                       class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-chat-left-text me-1"></i>Add Review
+                    </a>
+                </div>
+            </div>
+            {% if timeline %}
+            <div class="card-body">
+                <div class="position-relative ps-4">
+                    <!-- Vertical line -->
+                    <div class="position-absolute top-0 bottom-0" style="left: 11px; width: 2px; background: #dee2e6;"></div>
+
+                    {% for event in timeline %}
+                    <div class="d-flex align-items-start mb-3 position-relative">
+                        <!-- Timeline dot -->
+                        <div class="position-absolute d-flex align-items-center justify-content-center rounded-circle bg-{{ event.colour }} text-white"
+                             style="left: -28px; width: 24px; height: 24px; font-size: 0.7rem; z-index: 1;">
+                            <i class="bi {{ event.icon }}"></i>
+                        </div>
+                        <!-- Content -->
+                        <div class="flex-grow-1{% if event.type == 'evidence' %} border rounded p-2{% endif %}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    {% if event.type == 'evidence' and event.pk %}
+                                    <a href="{% url 'evidence:evidence_detail' event.pk %}" class="text-decoration-none fw-semibold">
+                                        {{ event.title }}
+                                    </a>
+                                    {% else %}
+                                    <span class="fw-semibold">{{ event.title }}</span>
+                                    {% endif %}
+                                    {% if event.user %}
+                                    <small class="text-muted ms-2">{{ event.user }}</small>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted text-nowrap ms-2">{{ event.date|date:"d-m-Y" }}</small>
+                            </div>
+                            {% if event.detail %}
+                            <p class="mb-0 mt-1 small text-muted">{{ event.detail }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <div class="card-body text-center text-muted py-4">
+                <i class="bi bi-clock-history" style="font-size: 2rem;"></i>
+                <p class="small mt-1 mb-0">No timeline events yet. Add a review or upload evidence to get started.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+        <!-- Assessment Progress for Linked Areas -->
+        {% if area_progress %}
+        <div class="card mb-3">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-bar-chart me-1"></i>Assessment Progress</h6>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for ap in area_progress %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <strong class="small">{{ ap.area.name }}</strong>
+                        <span class="badge bg-success">{{ ap.pct_secure }}%</span>
+                    </div>
+                    <small class="text-muted d-block mb-1">{{ ap.area.subject.name }} &middot; {{ ap.area.framework.name }}</small>
+                    <!-- Stacked progress bar -->
+                    <div class="progress" style="height: 8px;">
+                        {% widthratio ap.secure ap.total 100 as sec_pct %}
+                        {% widthratio ap.developing ap.total 100 as dev_pct %}
+                        {% widthratio ap.emerging ap.total 100 as eme_pct %}
+                        {% if ap.secure %}
+                        <div class="progress-bar bg-success" style="width: {{ sec_pct }}%"
+                             title="{{ ap.secure }} Secure"></div>
+                        {% endif %}
+                        {% if ap.developing %}
+                        <div class="progress-bar bg-warning" style="width: {{ dev_pct }}%"
+                             title="{{ ap.developing }} Developing"></div>
+                        {% endif %}
+                        {% if ap.emerging %}
+                        <div class="progress-bar bg-danger" style="width: {{ eme_pct }}%"
+                             title="{{ ap.emerging }} Emerging"></div>
+                        {% endif %}
+                    </div>
+                    <div class="d-flex justify-content-between mt-1">
+                        <small class="text-success">{{ ap.secure }}/{{ ap.total }} Secure</small>
+                        <small class="text-muted">{{ ap.developing }} Dev · {{ ap.emerging }} Eme</small>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Linked Assessment Areas -->
+        {% if linked_areas %}
+        <div class="card mb-3">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-link-45deg me-1"></i>Linked Assessment Areas</h6>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for area in linked_areas %}
+                <div class="list-group-item small">
+                    <strong>{{ area.subject.name }}</strong><br>
+                    {{ area.name }}
+                    <br><span class="text-muted">{{ area.framework.name }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Quick Stats -->
+        <div class="card">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-info-circle me-1"></i>Summary</h6>
+            </div>
+            <div class="list-group list-group-flush small">
+                <div class="list-group-item d-flex justify-content-between">
+                    <span>Reviews</span>
+                    <strong>{{ reviews|length }}</strong>
+                </div>
+                <div class="list-group-item d-flex justify-content-between">
+                    <span>Evidence items</span>
+                    <strong>{{ evidence_items|length }}</strong>
+                </div>
+                <div class="list-group-item d-flex justify-content-between">
+                    <span>Linked areas</span>
+                    <strong>{{ linked_areas|length }}</strong>
+                </div>
+                <div class="list-group-item d-flex justify-content-between">
+                    <span>Days since set</span>
+                    <strong>{{ target.set_date|timesince }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

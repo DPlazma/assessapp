@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% block title %}Upload Evidence — {{ student.full_name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    #camera-preview { display: none; width: 100%; max-width: 480px; border-radius: 8px; }
+    #camera-canvas { display: none; }
+    .capture-area { position: relative; }
+    .capture-area .btn-capture {
+        position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+        width: 60px; height: 60px; border-radius: 50%;
+        background: white; border: 4px solid #0d6efd;
+        display: flex; align-items: center; justify-content: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <h4 class="mb-3">
+            <i class="bi bi-cloud-upload text-primary me-2"></i>Upload Evidence
+        </h4>
+        <p class="text-muted">{{ student.full_name }}</p>
+
+        <!-- Tab: File Upload or Camera -->
+        <ul class="nav nav-tabs mb-3" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-file">
+                    <i class="bi bi-upload me-1"></i>File Upload
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-camera" id="camera-tab-btn">
+                    <i class="bi bi-camera me-1"></i>Take Photo
+                </button>
+            </li>
+        </ul>
+
+        <form method="post" enctype="multipart/form-data" id="upload-form">
+            {% csrf_token %}
+
+            <div class="tab-content">
+                <!-- File Upload Tab -->
+                <div class="tab-pane fade show active" id="tab-file">
+                    <div class="mb-3">
+                        <label for="file-input" class="form-label">Choose File</label>
+                        <input type="file" class="form-control" id="file-input" name="file"
+                               accept="image/*,video/*,.pdf,.doc,.docx,.heic,.heif">
+                        <small class="text-muted">Photos (incl. HEIC), videos, or documents. Max 50 MB.</small>
+                    </div>
+                </div>
+
+                <!-- Camera Tab -->
+                <div class="tab-pane fade" id="tab-camera">
+                    <div class="capture-area mb-3 text-center">
+                        <video id="camera-preview" autoplay playsinline></video>
+                        <canvas id="camera-canvas"></canvas>
+                        <img id="camera-snapshot" class="rounded d-none mb-2"
+                             style="max-width: 480px; width: 100%;">
+                        <div class="mt-2">
+                            <button type="button" id="btn-start-camera"
+                                    class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-camera-video me-1"></i>Start Camera
+                            </button>
+                            <button type="button" id="btn-capture"
+                                    class="btn btn-primary btn-sm d-none">
+                                <i class="bi bi-camera me-1"></i>Capture
+                            </button>
+                            <button type="button" id="btn-retake"
+                                    class="btn btn-outline-secondary btn-sm d-none">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>Retake
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Hidden file input to hold camera capture -->
+                    <input type="file" id="camera-file" name="camera_file" class="d-none" accept="image/*">
+                </div>
+            </div>
+
+            <!-- Common Fields -->
+            <div class="mb-3">
+                <label for="title" class="form-label">Title</label>
+                <input type="text" class="form-control" id="title" name="title"
+                       placeholder="Brief description (optional)">
+            </div>
+
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label for="evidence_type" class="form-label">Type</label>
+                    <select class="form-select" id="evidence_type" name="evidence_type">
+                        <option value="PHOTO">Photo</option>
+                        <option value="VIDEO">Video</option>
+                        <option value="DOCUMENT">Document</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="subject" class="form-label">Subject</label>
+                    <select class="form-select" id="subject" name="subject">
+                        <option value="">— None —</option>
+                        {% for s in subjects %}
+                        <option value="{{ s.pk }}">{{ s.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="captured_date" class="form-label">Date Captured</label>
+                    <input type="date" class="form-control" id="captured_date"
+                           name="captured_date" value="{{ today }}">
+                </div>
+            </div>
+
+            {% if targets %}
+            <div class="mb-3">
+                <label for="ehcp_target" class="form-label">Link to EHCP Target</label>
+                <select class="form-select" id="ehcp_target" name="ehcp_target">
+                    <option value="">— None —</option>
+                    {% for t in targets %}
+                    <option value="{{ t.pk }}" {% if request.GET.target == t.pk|stringformat:"d" %}selected{% endif %}>
+                        {{ t.title|truncatechars:60 }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+
+            <div class="mb-3">
+                <label for="description" class="form-label">Notes</label>
+                <textarea class="form-control" id="description" name="description"
+                          rows="2" placeholder="Context about this evidence..."></textarea>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-cloud-upload me-1"></i>Upload
+                </button>
+                <a href="{% url 'evidence:evidence_gallery' student.pk %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const preview = document.getElementById('camera-preview');
+    const canvas = document.getElementById('camera-canvas');
+    const snapshot = document.getElementById('camera-snapshot');
+    const btnStart = document.getElementById('btn-start-camera');
+    const btnCapture = document.getElementById('btn-capture');
+    const btnRetake = document.getElementById('btn-retake');
+    const fileInput = document.getElementById('file-input');
+    const form = document.getElementById('upload-form');
+    const typeSelect = document.getElementById('evidence_type');
+    let stream = null;
+    let capturedBlob = null;
+
+    // Auto-detect type from file extension
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            const name = this.files[0]?.name.toLowerCase() || '';
+            if (name.match(/\.(jpg|jpeg|png|gif|webp|heic|heif)$/)) typeSelect.value = 'PHOTO';
+            else if (name.match(/\.(mp4|webm|mov|avi)$/)) typeSelect.value = 'VIDEO';
+            else typeSelect.value = 'DOCUMENT';
+        });
+    }
+
+    btnStart.addEventListener('click', async function() {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment', width: { ideal: 1280 } },
+                audio: false
+            });
+            preview.srcObject = stream;
+            preview.style.display = 'block';
+            btnStart.classList.add('d-none');
+            btnCapture.classList.remove('d-none');
+            snapshot.classList.add('d-none');
+            typeSelect.value = 'PHOTO';
+        } catch (err) {
+            alert('Camera access denied or not available. Please use file upload instead.');
+        }
+    });
+
+    btnCapture.addEventListener('click', function() {
+        canvas.width = preview.videoWidth;
+        canvas.height = preview.videoHeight;
+        canvas.getContext('2d').drawImage(preview, 0, 0);
+
+        canvas.toBlob(function(blob) {
+            capturedBlob = blob;
+            snapshot.src = URL.createObjectURL(blob);
+            snapshot.classList.remove('d-none');
+            preview.style.display = 'none';
+            btnCapture.classList.add('d-none');
+            btnRetake.classList.remove('d-none');
+
+            // Stop camera
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+                stream = null;
+            }
+        }, 'image/jpeg', 0.9);
+    });
+
+    btnRetake.addEventListener('click', async function() {
+        capturedBlob = null;
+        snapshot.classList.add('d-none');
+        btnRetake.classList.add('d-none');
+        btnStart.classList.remove('d-none');
+        btnStart.click();
+    });
+
+    // Intercept form submit to inject camera blob
+    form.addEventListener('submit', function(e) {
+        if (capturedBlob && !fileInput.files.length) {
+            e.preventDefault();
+            const dt = new DataTransfer();
+            const file = new File([capturedBlob], 'camera_capture.jpg', { type: 'image/jpeg' });
+            dt.items.add(file);
+            fileInput.files = dt.files;
+            form.submit();
+        }
+    });
+
+    // Stop camera when leaving page
+    window.addEventListener('beforeunload', function() {
+        if (stream) stream.getTracks().forEach(t => t.stop());
+    });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,44 @@
+<!-- My Subjects - subject lead cross-class overview -->
+{% with subjects=widget.extra_context.lead_subjects %}
+{% if subjects %}
+<style>
+    .subj-mini-bar { height: 6px; border-radius: 3px; overflow: hidden; }
+</style>
+
+{% for subj in subjects %}
+<div class="mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="fw-semibold small">{{ subj.name }}</span>
+        <span class="text-muted" style="font-size: 0.7rem;">{{ subj.area_count }} area{{ subj.area_count|pluralize }}</span>
+    </div>
+    <div class="d-flex subj-mini-bar mb-1">
+        {% if subj.pcts.NYA %}
+        <div class="bg-secondary" style="width:{{ subj.pcts.NYA }}%" title="Not Assessed: {{ subj.counts.NYA }}"></div>
+        {% endif %}
+        {% if subj.pcts.EME %}
+        <div class="bg-danger" style="width:{{ subj.pcts.EME }}%" title="Emerging: {{ subj.counts.EME }}"></div>
+        {% endif %}
+        {% if subj.pcts.DEV %}
+        <div class="bg-warning" style="width:{{ subj.pcts.DEV }}%" title="Developing: {{ subj.counts.DEV }}"></div>
+        {% endif %}
+        {% if subj.pcts.SEC %}
+        <div class="bg-success" style="width:{{ subj.pcts.SEC }}%" title="Secure: {{ subj.counts.SEC }}"></div>
+        {% endif %}
+    </div>
+    <div class="d-flex gap-2" style="font-size: 0.7rem;">
+        <span><span class="badge bg-secondary py-0">N</span> {{ subj.counts.NYA }}</span>
+        <span><span class="badge bg-danger py-0">E</span> {{ subj.counts.EME }}</span>
+        <span><span class="badge bg-warning text-dark py-0">D</span> {{ subj.counts.DEV }}</span>
+        <span><span class="badge bg-success py-0">S</span> {{ subj.counts.SEC }}</span>
+        <span class="ms-auto text-muted">{{ subj.total }} total</span>
+    </div>
+</div>
+{% endfor %}
+
+{% else %}
+<div class="text-center text-muted py-3">
+    <i class="bi bi-journal-bookmark" style="font-size: 2rem;"></i>
+    <p class="small mb-0 mt-2">No subjects assigned to you yet.</p>
+</div>
+{% endif %}
+{% endwith %}

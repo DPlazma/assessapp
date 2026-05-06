@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+{% block title %}Manual Blur — {{ item.title }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'evidence:evidence_detail' item.pk %}" class="text-decoration-none">
+        <i class="bi bi-arrow-left me-1"></i>Back to evidence
+    </a>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <h5 class="mb-0"><i class="bi bi-brush me-2"></i>Manual Blur Brush</h5>
+        <div class="d-flex flex-wrap gap-3 align-items-center">
+            <div class="d-flex align-items-center gap-2">
+                <label class="form-label mb-0 small fw-semibold">Brush:</label>
+                <input type="range" id="brush-size" min="10" max="150" value="50"
+                       class="form-range" style="width: 130px;">
+                <span id="brush-size-label" class="badge bg-secondary">50px</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <label class="form-label mb-0 small fw-semibold">Zoom:</label>
+                <input type="range" id="zoom-level" min="10" max="200" value="100"
+                       class="form-range" style="width: 130px;">
+                <span id="zoom-label" class="badge bg-secondary">100%</span>
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-2">
+        <p class="text-muted small mb-2 px-2">
+            Draw over areas to blur (faces, name badges, etc).
+            On iPad: <strong>one finger</strong> draws, <strong>two fingers</strong> to pan &amp; pinch-zoom.
+        </p>
+
+        <div id="canvas-scroll-wrapper" style="overflow: auto; max-height: 80vh; border: 1px solid #dee2e6; border-radius: 0.375rem; background: #f0f0f0;">
+            <canvas id="draw-canvas" style="cursor: crosshair; touch-action: none; display: block;"></canvas>
+        </div>
+    </div>
+</div>
+
+<form method="post" action="{% url 'evidence:evidence_apply_manual_blur' item.pk %}" id="manual-blur-form">
+    {% csrf_token %}
+    <input type="hidden" name="blur_mask" id="blur-mask" value="">
+    <div class="d-flex flex-wrap gap-2">
+        <button type="submit" class="btn btn-primary" id="btn-save">
+            <i class="bi bi-check-circle me-1"></i>Save Blurred Image
+        </button>
+        <button type="button" class="btn btn-outline-secondary" id="btn-undo">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Undo
+        </button>
+        <button type="button" class="btn btn-outline-secondary" id="btn-clear">
+            <i class="bi bi-eraser me-1"></i>Clear All
+        </button>
+        <a href="{% url 'evidence:evidence_detail' item.pk %}" class="btn btn-outline-secondary">
+            Cancel
+        </a>
+    </div>
+</form>
+
+<!-- Hidden source canvas for original image data -->
+<canvas id="source-canvas" style="display: none;"></canvas>
+
+<script>
+(function() {
+    const drawCanvas = document.getElementById('draw-canvas');
+    const drawCtx = drawCanvas.getContext('2d');
+    const sourceCanvas = document.getElementById('source-canvas');
+    const sourceCtx = sourceCanvas.getContext('2d');
+    const wrapper = document.getElementById('canvas-scroll-wrapper');
+    const brushSlider = document.getElementById('brush-size');
+    const brushLabel = document.getElementById('brush-size-label');
+    const zoomSlider = document.getElementById('zoom-level');
+    const zoomLabel = document.getElementById('zoom-label');
+    const maskInput = document.getElementById('blur-mask');
+
+    let drawing = false;
+    let brushSize = 50;
+    let zoomPercent = 100;
+    let strokes = [];
+    let currentStroke = [];
+    let imgNaturalW = 0;
+    let imgNaturalH = 0;
+
+    /* ── Multi-touch state ─────────────────────────────────── */
+    let gestureActive = false;   // true while 2+ fingers are down
+    let lastPinchDist = 0;      // distance between 2 fingers (px)
+    let lastPinchMid = null;    // {x, y} midpoint of 2 fingers (client coords)
+
+    const img = new Image();
+    img.onload = function() {
+        imgNaturalW = img.naturalWidth;
+        imgNaturalH = img.naturalHeight;
+
+        sourceCanvas.width = imgNaturalW;
+        sourceCanvas.height = imgNaturalH;
+        sourceCtx.drawImage(img, 0, 0);
+
+        // Auto-fit: scale so image width matches the scroll wrapper
+        const wrapperW = wrapper.clientWidth - 4;
+        const fitPercent = Math.round((wrapperW / imgNaturalW) * 100);
+        zoomPercent = Math.min(fitPercent, 100);
+        zoomSlider.value = zoomPercent;
+        zoomLabel.textContent = zoomPercent + '%';
+
+        applyZoom();
+    };
+    img.src = '{{ item.file.url }}?v={{ item.updated_at|date:"U" }}';
+
+    brushSlider.addEventListener('input', function() {
+        brushSize = parseInt(this.value);
+        brushLabel.textContent = brushSize + 'px';
+    });
+
+    zoomSlider.addEventListener('input', function() {
+        zoomPercent = parseInt(this.value);
+        zoomLabel.textContent = zoomPercent + '%';
+        applyZoom();
+    });
+
+    function applyZoom() {
+        const w = Math.round(imgNaturalW * zoomPercent / 100);
+        const h = Math.round(imgNaturalH * zoomPercent / 100);
+        drawCanvas.width = w;
+        drawCanvas.height = h;
+        drawCanvas.dataset.scale = zoomPercent / 100;
+        redraw();
+    }
+
+    function redraw() {
+        const scale = parseFloat(drawCanvas.dataset.scale) || 1;
+        drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        drawCtx.drawImage(sourceCanvas, 0, 0, drawCanvas.width, drawCanvas.height);
+
+        if (strokes.length === 0 && currentStroke.length === 0) return;
+
+        const maskCanvas = document.createElement('canvas');
+        maskCanvas.width = drawCanvas.width;
+        maskCanvas.height = drawCanvas.height;
+        const maskCtx = maskCanvas.getContext('2d');
+        maskCtx.lineCap = 'round';
+        maskCtx.lineJoin = 'round';
+
+        function drawStrokeOnMask(stroke) {
+            if (stroke.length === 0) return;
+            for (let i = 0; i < stroke.length; i++) {
+                maskCtx.fillStyle = 'white';
+                maskCtx.beginPath();
+                maskCtx.arc(stroke[i].x * scale, stroke[i].y * scale,
+                           (stroke[i].size / 2) * scale, 0, Math.PI * 2);
+                maskCtx.fill();
+            }
+            if (stroke.length > 1) {
+                maskCtx.strokeStyle = 'white';
+                maskCtx.beginPath();
+                maskCtx.lineWidth = stroke[0].size * scale;
+                maskCtx.moveTo(stroke[0].x * scale, stroke[0].y * scale);
+                for (let i = 1; i < stroke.length; i++) {
+                    maskCtx.lineWidth = stroke[i].size * scale;
+                    maskCtx.lineTo(stroke[i].x * scale, stroke[i].y * scale);
+                }
+                maskCtx.stroke();
+            }
+        }
+
+        strokes.forEach(drawStrokeOnMask);
+        drawStrokeOnMask(currentStroke);
+
+        const blurCanvas = document.createElement('canvas');
+        blurCanvas.width = drawCanvas.width;
+        blurCanvas.height = drawCanvas.height;
+        const blurCtx = blurCanvas.getContext('2d');
+        const blurFactor = 20;
+        const smallW = Math.max(1, Math.round(drawCanvas.width / blurFactor));
+        const smallH = Math.max(1, Math.round(drawCanvas.height / blurFactor));
+        blurCtx.drawImage(sourceCanvas, 0, 0, smallW, smallH);
+        blurCtx.imageSmoothingEnabled = true;
+        blurCtx.imageSmoothingQuality = 'high';
+        blurCtx.drawImage(blurCanvas, 0, 0, smallW, smallH, 0, 0, drawCanvas.width, drawCanvas.height);
+
+        drawCtx.globalCompositeOperation = 'destination-out';
+        drawCtx.drawImage(maskCanvas, 0, 0);
+        drawCtx.globalCompositeOperation = 'destination-over';
+        drawCtx.drawImage(blurCanvas, 0, 0);
+        drawCtx.globalCompositeOperation = 'source-over';
+
+        drawCtx.globalAlpha = 0.12;
+        drawCtx.drawImage(maskCanvas, 0, 0);
+        drawCtx.globalAlpha = 1.0;
+    }
+
+    /* ── Coordinate helpers ────────────────────────────────── */
+    function getPos(e) {
+        const rect = drawCanvas.getBoundingClientRect();
+        const cssToCanvasX = drawCanvas.width / rect.width;
+        const cssToCanvasY = drawCanvas.height / rect.height;
+        const scale = parseFloat(drawCanvas.dataset.scale) || 1;
+        let cx, cy;
+        if (e.touches && e.touches.length > 0) {
+            cx = (e.touches[0].clientX - rect.left) * cssToCanvasX;
+            cy = (e.touches[0].clientY - rect.top) * cssToCanvasY;
+        } else {
+            cx = (e.clientX - rect.left) * cssToCanvasX;
+            cy = (e.clientY - rect.top) * cssToCanvasY;
+        }
+        return { x: cx / scale, y: cy / scale };
+    }
+
+    function pinchDist(t1, t2) {
+        const dx = t1.clientX - t2.clientX;
+        const dy = t1.clientY - t2.clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function pinchMid(t1, t2) {
+        return {
+            x: (t1.clientX + t2.clientX) / 2,
+            y: (t1.clientY + t2.clientY) / 2,
+        };
+    }
+
+    /* ── Single-finger drawing (mouse + touch) ─────────────── */
+    function startDraw(e) {
+        if (gestureActive) return;
+        drawing = true;
+        currentStroke = [];
+        const pos = getPos(e);
+        currentStroke.push({ x: pos.x, y: pos.y, size: brushSize });
+        redraw();
+    }
+
+    function moveDraw(e) {
+        if (!drawing || gestureActive) return;
+        const pos = getPos(e);
+        currentStroke.push({ x: pos.x, y: pos.y, size: brushSize });
+        redraw();
+    }
+
+    function endDraw() {
+        if (!drawing) return;
+        drawing = false;
+        if (currentStroke.length > 0) {
+            strokes.push(currentStroke);
+            currentStroke = [];
+        }
+        syncMaskData();
+    }
+
+    function cancelDraw() {
+        // Cancel in-progress stroke (e.g. when a second finger lands)
+        if (drawing) {
+            drawing = false;
+            currentStroke = [];
+            redraw();
+        }
+    }
+
+    /* ── Mouse events ──────────────────────────────────────── */
+    drawCanvas.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        startDraw(e);
+    });
+    drawCanvas.addEventListener('mousemove', function(e) {
+        if (!drawing) return;
+        e.preventDefault();
+        moveDraw(e);
+    });
+    drawCanvas.addEventListener('mouseup', endDraw);
+    drawCanvas.addEventListener('mouseleave', endDraw);
+
+    /* ── Touch events (1 finger = draw, 2 fingers = pan/zoom) */
+    drawCanvas.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+
+        if (e.touches.length >= 2) {
+            // Two or more fingers → enter gesture mode
+            cancelDraw();
+            gestureActive = true;
+            lastPinchDist = pinchDist(e.touches[0], e.touches[1]);
+            lastPinchMid = pinchMid(e.touches[0], e.touches[1]);
+            return;
+        }
+
+        // Single finger → draw (only if not already in gesture)
+        if (!gestureActive) {
+            startDraw(e);
+        }
+    }, { passive: false });
+
+    drawCanvas.addEventListener('touchmove', function(e) {
+        e.preventDefault();
+
+        if (e.touches.length >= 2) {
+            // ── Pinch-zoom ──
+            const dist = pinchDist(e.touches[0], e.touches[1]);
+            const mid  = pinchMid(e.touches[0], e.touches[1]);
+
+            if (!gestureActive) {
+                // Second finger just arrived mid-stroke
+                cancelDraw();
+                gestureActive = true;
+                lastPinchDist = dist;
+                lastPinchMid = mid;
+                return;
+            }
+
+            // Zoom: scale proportional to pinch distance change
+            const ratio = dist / lastPinchDist;
+            let newZoom = Math.round(zoomPercent * ratio);
+            newZoom = Math.max(10, Math.min(400, newZoom));
+
+            // Pan: shift scroll position by midpoint delta
+            const dx = lastPinchMid.x - mid.x;
+            const dy = lastPinchMid.y - mid.y;
+
+            if (newZoom !== zoomPercent) {
+                // Zoom centred on the pinch midpoint
+                const wrapperRect = wrapper.getBoundingClientRect();
+                const focalX = mid.x - wrapperRect.left + wrapper.scrollLeft;
+                const focalY = mid.y - wrapperRect.top  + wrapper.scrollTop;
+                const zoomRatio = newZoom / zoomPercent;
+
+                zoomPercent = newZoom;
+                zoomSlider.value = Math.min(zoomPercent, parseInt(zoomSlider.max));
+                zoomLabel.textContent = zoomPercent + '%';
+                applyZoom();
+
+                // Adjust scroll so the focal point stays under the fingers
+                wrapper.scrollLeft = focalX * zoomRatio - (mid.x - wrapperRect.left) + dx;
+                wrapper.scrollTop  = focalY * zoomRatio - (mid.y - wrapperRect.top)  + dy;
+            } else {
+                // Pure pan
+                wrapper.scrollLeft += dx;
+                wrapper.scrollTop  += dy;
+            }
+
+            lastPinchDist = dist;
+            lastPinchMid = mid;
+            return;
+        }
+
+        // Single finger while not in gesture → draw
+        if (!gestureActive) {
+            moveDraw(e);
+        }
+    }, { passive: false });
+
+    drawCanvas.addEventListener('touchend', function(e) {
+        if (e.touches.length < 2) {
+            // All gesture fingers lifted → exit gesture mode
+            if (gestureActive) {
+                gestureActive = false;
+                lastPinchDist = 0;
+                lastPinchMid = null;
+                return;
+            }
+        }
+        if (!gestureActive) {
+            endDraw();
+        }
+    });
+
+    drawCanvas.addEventListener('touchcancel', function() {
+        gestureActive = false;
+        lastPinchDist = 0;
+        lastPinchMid = null;
+        endDraw();
+    });
+
+    /* ── Buttons ───────────────────────────────────────────── */
+    document.getElementById('btn-undo').addEventListener('click', function() {
+        strokes.pop();
+        redraw();
+        syncMaskData();
+    });
+
+    document.getElementById('btn-clear').addEventListener('click', function() {
+        strokes = [];
+        currentStroke = [];
+        redraw();
+        syncMaskData();
+    });
+
+    function syncMaskData() {
+        const serverStrokes = strokes.map(function(stroke) {
+            return stroke.map(function(pt) {
+                return {
+                    x: Math.round(pt.x),
+                    y: Math.round(pt.y),
+                    size: Math.round(pt.size),
+                };
+            });
+        });
+        maskInput.value = JSON.stringify(serverStrokes);
+    }
+
+    // Sync data right before form submit
+    document.getElementById('manual-blur-form').addEventListener('submit', function(e) {
+        syncMaskData();
+        if (strokes.length === 0) {
+            if (!confirm('No areas selected for blurring. Save without changes?')) {
+                e.preventDefault();
+            }
+        }
+    });
+})();
+</script>
+{% endblock %}

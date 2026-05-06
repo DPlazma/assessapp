@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Subject Progress — AssessApp{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-pie-chart me-2"></i>Subject Progress</h4>
+    <div class="d-flex gap-2">
+        <a href="{% url 'reports:subject_progress_export_excel' %}?{{ request.GET.urlencode }}"
+           class="btn btn-success btn-sm">
+            <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export Excel
+        </a>
+        <a href="{% url 'reports:subject_progress_export_pdf' %}?{{ request.GET.urlencode }}"
+           class="btn btn-danger btn-sm">
+            <i class="bi bi-file-earmark-pdf me-1"></i>Export PDF
+        </a>
+        <a href="{% url 'reports:index' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>All Reports
+        </a>
+    </div>
+</div>
+
+{% include "reports/partials/filter_panel.html" %}
+
+{% if not subject_data %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle me-1"></i>
+    No assessment data matches the current filters.
+</div>
+{% else %}
+
+<p class="text-muted mb-3">
+    Showing {{ num_students }} student{{ num_students|pluralize }} across {{ subject_data|length }} subject{{ subject_data|length|pluralize }}.
+    <span class="badge bg-secondary ms-2"><i class="bi bi-clock me-1"></i>{{ time_label }}</span>
+</p>
+
+{# Summary cards #}
+<div class="row g-3 mb-4">
+    {% for item in subject_data %}
+    <div class="col-md-6 col-xl-4">
+        <div class="card h-100">
+            <div class="card-header fw-bold">{{ item.subject.name }}</div>
+            <div class="card-body">
+                <div class="mb-2 text-muted" style="font-size: 0.85rem;">
+                    {{ item.num_students }} students &times; {{ item.num_statements }} statements
+                </div>
+
+                {# Stacked bar #}
+                <div class="progress mb-3" style="height: 28px;">
+                    {% if item.percentages.NYA > 0 %}
+                    <div class="progress-bar" role="progressbar"
+                         style="width: {{ item.percentages.NYA }}%; background-color: var(--rag-nya);"
+                         title="NYA: {{ item.percentages.NYA }}%">
+                        {% if item.percentages.NYA > 8 %}{{ item.percentages.NYA }}%{% endif %}
+                    </div>
+                    {% endif %}
+                    {% if item.percentages.EME > 0 %}
+                    <div class="progress-bar" role="progressbar"
+                         style="width: {{ item.percentages.EME }}%; background-color: var(--rag-emerging);"
+                         title="Emerging: {{ item.percentages.EME }}%">
+                        {% if item.percentages.EME > 8 %}{{ item.percentages.EME }}%{% endif %}
+                    </div>
+                    {% endif %}
+                    {% if item.percentages.DEV > 0 %}
+                    <div class="progress-bar" role="progressbar"
+                         style="width: {{ item.percentages.DEV }}%; background-color: var(--rag-developing);"
+                         title="Developing: {{ item.percentages.DEV }}%">
+                        {% if item.percentages.DEV > 8 %}{{ item.percentages.DEV }}%{% endif %}
+                    </div>
+                    {% endif %}
+                    {% if item.percentages.SEC > 0 %}
+                    <div class="progress-bar" role="progressbar"
+                         style="width: {{ item.percentages.SEC }}%; background-color: var(--rag-secure);"
+                         title="Secure: {{ item.percentages.SEC }}%">
+                        {% if item.percentages.SEC > 8 %}{{ item.percentages.SEC }}%{% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+
+                {# Numbers #}
+                <div class="d-flex justify-content-between" style="font-size: 0.85rem;">
+                    <span><span class="badge status-NYA">{{ item.counts.NYA }}</span> NYA</span>
+                    <span><span class="badge status-EME">{{ item.counts.EME }}</span> Emerging</span>
+                    <span><span class="badge status-DEV">{{ item.counts.DEV }}</span> Developing</span>
+                    <span><span class="badge status-SEC">{{ item.counts.SEC }}</span> Secure</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{# Table view #}
+<h5 class="mt-3"><i class="bi bi-table me-1"></i>Detail Table</h5>
+<div class="table-responsive">
+<table class="table table-sm table-bordered table-striped">
+    <thead class="table-light">
+        <tr>
+            <th>Subject</th>
+            <th class="text-center">Students</th>
+            <th class="text-center">Statements</th>
+            <th class="text-center text-secondary">NYA %</th>
+            <th class="text-center text-danger">Emerging %</th>
+            <th class="text-center" style="color: var(--rag-developing);">Developing %</th>
+            <th class="text-center text-success">Secure %</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in subject_data %}
+        <tr>
+            <td class="fw-bold">{{ item.subject.name }}</td>
+            <td class="text-center">{{ item.num_students }}</td>
+            <td class="text-center">{{ item.num_statements }}</td>
+            <td class="text-center">{{ item.percentages.NYA }}%</td>
+            <td class="text-center">{{ item.percentages.EME }}%</td>
+            <td class="text-center">{{ item.percentages.DEV }}%</td>
+            <td class="text-center">{{ item.percentages.SEC }}%</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+{# Legend #}
+<div class="d-flex gap-2 mt-2 flex-wrap">
+    <span class="badge status-NYA">Not Yet Assessed</span>
+    <span class="badge status-EME">Emerging</span>
+    <span class="badge status-DEV">Developing</span>
+    <span class="badge status-SEC">Secure</span>
+</div>
+{% endif %}
+{% endblock %}

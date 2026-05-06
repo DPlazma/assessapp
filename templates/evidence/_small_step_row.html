@@ -1,0 +1,39 @@
+<tr id="step-row-{{ step.pk }}">
+    <td>
+        <span class="badge bg-primary fs-6">{{ step.letter }}</span>
+    </td>
+    <td>{{ step.description }}</td>
+    <td>
+        <form hx-post="{% url 'evidence:small_step_update_status' step.pk %}"
+              hx-target="#step-row-{{ step.pk }}"
+              hx-swap="outerHTML">
+            {% csrf_token %}
+            <select name="status" class="form-select form-select-sm
+                {% if step.status == 'ACHIEVED' %}border-success text-success
+                {% elif step.status == 'WORKING_ON' %}border-primary text-primary
+                {% else %}border-secondary
+                {% endif %}"
+                onchange="this.form.requestSubmit()">
+                <option value="NOT_STARTED" {% if step.status == "NOT_STARTED" %}selected{% endif %}>Not Started</option>
+                <option value="WORKING_ON" {% if step.status == "WORKING_ON" %}selected{% endif %}>Working On</option>
+                <option value="ACHIEVED" {% if step.status == "ACHIEVED" %}selected{% endif %}>Achieved</option>
+            </select>
+        </form>
+    </td>
+    <td>
+        <small class="text-muted">
+            {% if step.status_date %}{{ step.status_date|date:"d-m-Y" }}{% else %}—{% endif %}
+        </small>
+    </td>
+    <td>
+        <form method="post" action="{% url 'evidence:small_steps_manage' target.pk %}" class="d-inline"
+              onsubmit="return confirm('Delete step {{ step.letter }}?')">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="step_pk" value="{{ step.pk }}">
+            <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete">
+                <i class="bi bi-trash"></i>
+            </button>
+        </form>
+    </td>
+</tr>

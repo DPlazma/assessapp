@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Evidence — {{ student.full_name }}{% endblock %}
+
+{% block content %}
+{% include "students/_student_nav.html" with student_nav="evidence" %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h5 class="mb-0"><i class="bi bi-images text-primary me-2"></i>Evidence Gallery</h5>
+    <div>
+        <a href="{% url 'evidence:evidence_upload' student.pk %}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>Upload
+        </a>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="d-flex gap-2 mb-3 flex-wrap">
+    <a href="{% url 'evidence:evidence_gallery' student.pk %}"
+       class="btn btn-sm {% if not current_type %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        All
+    </a>
+    <a href="{% url 'evidence:evidence_gallery' student.pk %}?type=PHOTO"
+       class="btn btn-sm {% if current_type == 'PHOTO' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        <i class="bi bi-camera me-1"></i>Photos
+    </a>
+    <a href="{% url 'evidence:evidence_gallery' student.pk %}?type=VIDEO"
+       class="btn btn-sm {% if current_type == 'VIDEO' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        <i class="bi bi-play-circle me-1"></i>Videos
+    </a>
+    <a href="{% url 'evidence:evidence_gallery' student.pk %}?type=DOCUMENT"
+       class="btn btn-sm {% if current_type == 'DOCUMENT' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+        <i class="bi bi-file-earmark me-1"></i>Documents
+    </a>
+</div>
+
+<!-- Gallery Grid -->
+{% if items %}
+<div class="row g-3">
+    {% for item in items %}
+    <div class="col-6 col-md-4 col-lg-3">
+        <a href="{% url 'evidence:evidence_detail' item.pk %}" class="text-decoration-none">
+            <div class="card h-100 border-0 shadow-sm">
+                {% if item.is_image %}
+                <img src="{% if item.thumbnail %}{{ item.thumbnail.url }}{% else %}{{ item.file.url }}{% endif %}?v={{ item.updated_at|date:'U' }}" alt="{{ item.title }}"
+                     class="card-img-top" style="height: 160px; object-fit: cover;">
+                {% elif item.is_video %}
+                <div class="position-relative" style="height: 160px;">
+                    {% if item.thumbnail %}
+                    <img src="{{ item.thumbnail.url }}?v={{ item.updated_at|date:'U' }}" alt="{{ item.title }}"
+                         class="card-img-top" style="height: 160px; object-fit: cover;">
+                    {% else %}
+                    <div class="card-img-top bg-dark" style="height: 160px;"></div>
+                    {% endif %}
+                    <div class="position-absolute top-50 start-50 translate-middle">
+                        <i class="bi bi-play-circle-fill text-white" style="font-size: 2.5rem; opacity: 0.85;"></i>
+                    </div>
+                </div>
+                {% else %}
+                <div class="card-img-top bg-light d-flex align-items-center justify-content-center"
+                     style="height: 160px;">
+                    <i class="bi bi-file-earmark-text text-secondary" style="font-size: 3rem;"></i>
+                </div>
+                {% endif %}
+                <div class="card-body p-2">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <small class="fw-semibold text-body">{{ item.title|truncatechars:30 }}</small>
+                        {% if item.is_shared_with_family %}
+                        <i class="bi bi-people-fill text-success flex-shrink-0" title="Shared with family"></i>
+                        {% else %}
+                        <i class="bi bi-lock-fill text-muted flex-shrink-0" title="Private"></i>
+                        {% endif %}
+                    </div>
+                    <small class="text-muted">
+                        {{ item.captured_date|date:"d-m-Y" }}
+                        {% if item.subject %}&middot; {{ item.subject.short_name|default:item.subject.name }}{% endif %}
+                    </small>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+    <i class="bi bi-images" style="font-size: 3rem;"></i>
+    <p class="mt-2">No evidence uploaded yet.</p>
+    <a href="{% url 'evidence:evidence_upload' student.pk %}" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>Upload First Evidence
+    </a>
+</div>
+{% endif %}
+{% endblock %}

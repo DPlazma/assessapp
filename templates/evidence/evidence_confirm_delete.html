@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Delete Evidence{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card border-danger">
+            <div class="card-body text-center">
+                <i class="bi bi-exclamation-triangle text-danger" style="font-size: 3rem;"></i>
+                <h5 class="mt-2">Delete Evidence?</h5>
+                <p class="text-muted">
+                    Are you sure you want to delete <strong>"{{ item.title }}"</strong>?
+                    This cannot be undone.
+                </p>
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex gap-2 justify-content-center">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-trash me-1"></i>Delete
+                        </button>
+                        <a href="{% url 'evidence:evidence_detail' item.pk %}" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

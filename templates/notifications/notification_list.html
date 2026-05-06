@@ -1,0 +1,47 @@
+{% if notifications %}
+<div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+    <small class="text-muted fw-semibold">Notifications</small>
+    <button class="btn btn-link btn-sm p-0 text-decoration-none"
+            hx-post="{% url 'notifications:mark_all_read' %}"
+            hx-swap="none">
+        Mark all read
+    </button>
+</div>
+{% for n in notifications %}
+<div class="dropdown-item-text px-3 py-2 border-bottom {% if not n.is_read %}bg-light{% endif %}"
+     style="white-space: normal; max-width: 360px;">
+    <div class="d-flex align-items-start gap-2">
+        <i class="bi {{ n.icon }} mt-1 {% if n.priority == 'HIGH' %}text-danger{% elif n.priority == 'MEDIUM' %}text-warning{% else %}text-info{% endif %}"></i>
+        <div class="flex-grow-1">
+            <div class="fw-semibold small">{{ n.title }}</div>
+            <div class="text-muted small" style="font-size: 0.8rem;">{{ n.message|truncatechars:120 }}</div>
+            <div class="d-flex justify-content-between align-items-center mt-1">
+                <small class="text-muted" style="font-size: 0.7rem;">{{ n.created_at|timesince }} ago</small>
+                <div class="btn-group btn-group-sm">
+                    {% if n.link %}
+                    <a class="btn btn-outline-primary btn-sm py-0 px-1"
+                       hx-post="{% url 'notifications:mark_read' n.pk %}"
+                       hx-swap="none"
+                       style="font-size: 0.75rem;">
+                        View
+                    </a>
+                    {% endif %}
+                    <button class="btn btn-outline-secondary btn-sm py-0 px-1"
+                            hx-post="{% url 'notifications:dismiss' n.pk %}"
+                            hx-target="closest div.dropdown-item-text"
+                            hx-swap="outerHTML"
+                            style="font-size: 0.75rem;">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="dropdown-item-text text-center text-muted py-4">
+    <i class="bi bi-bell-slash fs-4 d-block mb-1"></i>
+    No notifications
+</div>
+{% endif %}

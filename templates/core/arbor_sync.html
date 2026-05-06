@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Arbor Sync Dashboard — AssessApp{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'core:arbor_settings' %}" class="text-decoration-none">
+        <i class="bi bi-arrow-left me-1"></i>Back to Arbor Settings
+    </a>
+</div>
+
+<h4 class="mb-4"><i class="bi bi-arrow-repeat me-2"></i>Arbor Sync Dashboard</h4>
+
+{% if not arbor.enabled %}
+<div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    Arbor integration is currently <strong>disabled</strong>.
+    <a href="{% url 'core:arbor_settings' %}">Enable it in settings</a> to start syncing.
+</div>
+{% else %}
+
+<!-- ── Run Sync ──────────────────────────────────────────── -->
+<div class="card mb-4">
+    <div class="card-body">
+        <h6><i class="bi bi-play-circle me-1"></i>Push Assessment Data to Arbor</h6>
+        <p class="text-muted small mb-3">
+            This will send the latest assessment record per student per subject to Arbor.
+            Only records with valid entity mappings will be synced.
+        </p>
+        <button type="button" class="btn btn-success" id="btn-run-sync">
+            <i class="bi bi-cloud-arrow-up me-1"></i>Run Sync Now
+        </button>
+        <div id="sync-result" class="mt-3" style="display:none;"></div>
+    </div>
+</div>
+
+<!-- ── Sync Log ──────────────────────────────────────────── -->
+<div class="card">
+    <div class="card-header fw-semibold">
+        <i class="bi bi-journal-text me-1"></i>Recent Sync Logs
+    </div>
+    <div class="card-body p-0">
+        {% if logs %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Started</th>
+                        <th>Status</th>
+                        <th>Attempted</th>
+                        <th>Succeeded</th>
+                        <th>Failed</th>
+                        <th>Summary</th>
+                        <th>User</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td class="small text-nowrap">{{ log.started_at|date:"d-m-Y H:i" }}</td>
+                        <td>
+                            {% if log.status == "success" %}
+                                <span class="badge bg-success">Success</span>
+                            {% elif log.status == "partial" %}
+                                <span class="badge bg-warning text-dark">Partial</span>
+                            {% elif log.status == "failed" %}
+                                <span class="badge bg-danger">Failed</span>
+                            {% elif log.status == "running" %}
+                                <span class="badge bg-info">Running</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ log.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ log.records_attempted }}</td>
+                        <td class="text-success">{{ log.records_succeeded }}</td>
+                        <td class="text-danger">{{ log.records_failed }}</td>
+                        <td class="small">{{ log.summary|default:"—" }}</td>
+                        <td class="small">{{ log.triggered_by|default:"—" }}</td>
+                    </tr>
+                    {% if log.error_details %}
+                    <tr>
+                        <td colspan="7" class="bg-light">
+                            <details class="small">
+                                <summary class="text-muted">View errors ({{ log.error_details|length }})</summary>
+                                <ul class="mb-0 mt-1">
+                                    {% for err in log.error_details %}
+                                    <li><strong>{{ err.student }}</strong>: {{ err.error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </details>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-4 text-center text-muted">
+            <i class="bi bi-inbox me-1"></i>No sync logs yet. Run your first sync above.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('btn-run-sync')?.addEventListener('click', function() {
+    var btn = this;
+    var result = document.getElementById('sync-result');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Syncing…';
+    result.style.display = 'none';
+
+    fetch('{% url "core:arbor_run_sync" %}', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        result.style.display = 'block';
+        if (data.ok) {
+            result.className = 'mt-3 alert alert-success py-2';
+            result.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>' + data.msg +
+                ' <a href="" class="alert-link">Refresh to see log</a>.';
+        } else {
+            result.className = 'mt-3 alert alert-danger py-2';
+            result.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>' + data.msg;
+        }
+    })
+    .catch(function(err) {
+        result.style.display = 'block';
+        result.className = 'mt-3 alert alert-danger py-2';
+        result.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>Request failed: ' + err;
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i>Run Sync Now';
+    });
+});
+</script>
+{% endblock %}

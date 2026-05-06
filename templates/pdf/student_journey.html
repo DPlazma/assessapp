@@ -1,0 +1,147 @@
+{% extends "pdf/base_pdf.html" %}
+{% block title %}Learning Journey — {{ student.full_name }}{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="header-card">
+    <p class="name">{{ student.full_name }}</p>
+    <p class="details">
+        {{ student.get_pathway_display }} · Phase {{ student.phase }}
+        {% if student.year_group %} · Year {{ student.year_group }}{% endif %}
+        {% if student.class_group %} · {{ student.class_group.name }}{% endif %}
+        {% if student.date_of_birth %} · DOB: {{ student.date_of_birth|date:"d-m-Y" }}{% endif %}
+        {% if student.upn %} · UPN: {{ student.upn }}{% endif %}
+    </p>
+</div>
+
+<p class="meta">Generated {{ today|date:"d-m-Y" }} — West Gate School AssessApp</p>
+
+<!-- Overall Summary -->
+{% if overall_total > 0 %}
+<h2>Overall Assessment Summary</h2>
+<div class="summary-grid">
+    <div class="summary-box">
+        <div class="num" style="color:#6c757d;">{{ overall_nya }}</div>
+        <div class="label">Not Assessed</div>
+    </div>
+    <div class="summary-box">
+        <div class="num" style="color:#dc3545;">{{ overall_emerging }}</div>
+        <div class="label">Emerging</div>
+    </div>
+    <div class="summary-box">
+        <div class="num" style="color:#fd7e14;">{{ overall_developing }}</div>
+        <div class="label">Developing</div>
+    </div>
+    <div class="summary-box">
+        <div class="num" style="color:#198754;">{{ overall_secure }}</div>
+        <div class="label">Secure</div>
+    </div>
+</div>
+{% if overall_total > 0 %}
+<div class="progress-bar">
+    <div class="seg seg-eme" style="width:{% widthratio overall_emerging overall_total 100 %}%;"></div>
+    <div class="seg seg-dev" style="width:{% widthratio overall_developing overall_total 100 %}%;"></div>
+    <div class="seg seg-sec" style="width:{% widthratio overall_secure overall_total 100 %}%;"></div>
+</div>
+<p class="meta">{{ overall_total }} statement{{ overall_total|pluralize }} across {{ subject_summaries|length }} subject{{ subject_summaries|length|pluralize }}</p>
+{% endif %}
+{% endif %}
+
+<!-- AI Progress Narrative -->
+{% if ai_narrative %}
+<h2>Progress Narrative</h2>
+<div class="narrative">
+    {{ ai_narrative|safe }}
+</div>
+{% endif %}
+
+<!-- Subject Breakdown -->
+{% if subject_summaries %}
+<h2>Subject Breakdown</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Subject</th>
+            <th class="num">Total</th>
+            <th class="num">NYA</th>
+            <th class="num">Emerging</th>
+            <th class="num">Developing</th>
+            <th class="num">Secure</th>
+            <th class="num">% Secure</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for s in subject_summaries %}
+        <tr>
+            <td>{{ s.subject.name }}</td>
+            <td class="num">{{ s.total }}</td>
+            <td class="num">{{ s.not_yet }}</td>
+            <td class="num"><span class="badge badge-EME">{{ s.emerging }}</span></td>
+            <td class="num"><span class="badge badge-DEV">{{ s.developing }}</span></td>
+            <td class="num"><span class="badge badge-SEC">{{ s.secure }}</span></td>
+            <td class="num">{% if s.total > 0 %}{% widthratio s.secure s.total 100 %}%{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<!-- Snapshot History -->
+{% if snapshot_by_term %}
+<h2>Termly Snapshots</h2>
+{% for term_label, snaps in snapshot_by_term.items %}
+<h3>{{ term_label }}</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Area</th>
+            <th class="num">Total</th>
+            <th class="num">NYA</th>
+            <th class="num">Emerging</th>
+            <th class="num">Developing</th>
+            <th class="num">Secure</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for snap in snaps %}
+        <tr class="avoid-break">
+            <td>{{ snap.area.name }} ({{ snap.area.subject.name }})</td>
+            <td class="num">{{ snap.total_statements }}</td>
+            <td class="num">{{ snap.not_assessed_count }}</td>
+            <td class="num"><span class="badge badge-EME">{{ snap.emerging_count }}</span></td>
+            <td class="num"><span class="badge badge-DEV">{{ snap.developing_count }}</span></td>
+            <td class="num"><span class="badge badge-SEC">{{ snap.secure_count }}</span></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endfor %}
+{% endif %}
+
+<!-- Recent Assessments -->
+{% if recent_records %}
+<h2>Recent Assessments</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Subject</th>
+            <th>Statement</th>
+            <th class="num">Status</th>
+            <th>Assessed By</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in recent_records %}
+        <tr class="avoid-break">
+            <td style="white-space:nowrap;">{{ r.assessed_date|date:"d-m-Y" }}</td>
+            <td>{{ r.statement.area.subject.name }}</td>
+            <td>{{ r.statement.statement_text|truncatewords:20 }}</td>
+            <td class="num"><span class="badge badge-{{ r.status }}">{{ r.get_status_display }}</span></td>
+            <td>{{ r.assessed_by.get_full_name|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}

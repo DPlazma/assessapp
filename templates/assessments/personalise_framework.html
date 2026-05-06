@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Personalise {{ framework.name }} for {{ student.full_name }} — AssessApp{% endblock %}
+
+{% block content %}
+{# ── Breadcrumb ── #}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'assessments:framework_hub' %}">Frameworks</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'assessments:framework_detail' framework.pk %}">{{ framework.name }}</a></li>
+        <li class="breadcrumb-item active">Personalise for {{ student.full_name }}</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+        <h4 class="mb-1">
+            <i class="bi bi-person-gear text-primary me-2"></i>Personalise Statements
+        </h4>
+        <p class="text-muted mb-0">
+            Select which statements from <strong>{{ framework.name }}</strong>
+            are relevant for <strong>{{ student.full_name }}</strong>.
+            Unticked statements won't appear during assessment.
+        </p>
+    </div>
+    <div>
+        <span class="badge bg-primary fs-6" id="selected-count">{{ selected_ids|length }}</span>
+        <small class="text-muted"> / {{ total_statements }} selected</small>
+    </div>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+
+    {# ── Quick actions ── #}
+    <div class="d-flex gap-2 mb-3 flex-wrap">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAll(true)">
+            <i class="bi bi-check-all me-1"></i>Select All
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAll(false)">
+            <i class="bi bi-x-lg me-1"></i>Clear All
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm ms-auto">
+            <i class="bi bi-check-lg me-1"></i>Save Personalisation
+        </button>
+    </div>
+
+    {# ── Areas + Statements ── #}
+    {% for area in areas %}
+    <div class="card mb-3 border-0 shadow-sm">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center"
+             data-bs-toggle="collapse" data-bs-target="#area-{{ area.pk }}" role="button">
+            <div>
+                <h6 class="mb-0">{{ area.name }}</h6>
+                <small class="text-muted">
+                    {{ area.subject.name }}
+                    {% if area.year_group %}&middot; Year {{ area.year_group }}{% endif %}
+                    {% if area.phase %}&middot; Phase {{ area.phase }}{% endif %}
+                    &middot; {{ area.statements.count }} statement{{ area.statements.count|pluralize }}
+                </small>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+                <span class="badge bg-success area-badge" data-area="{{ area.pk }}">0</span>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        onclick="event.stopPropagation(); toggleArea({{ area.pk }}, true);" title="Select all in area">
+                    <i class="bi bi-check-all"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary"
+                        onclick="event.stopPropagation(); toggleArea({{ area.pk }}, false);" title="Clear area">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+        </div>
+        <div id="area-{{ area.pk }}" class="collapse show">
+            <div class="list-group list-group-flush">
+                {% for stmt in area.statements.all %}
+                <label class="list-group-item list-group-item-action py-2 ps-3 d-flex align-items-start gap-2 mb-0"
+                       for="stmt-{{ stmt.pk }}" style="cursor:pointer">
+                    <input class="form-check-input mt-1 stmt-cb" type="checkbox"
+                           name="statement_ids" value="{{ stmt.pk }}" id="stmt-{{ stmt.pk }}"
+                           data-area="{{ area.pk }}"
+                           {% if stmt.pk in selected_ids %}checked{% endif %}
+                           onchange="updateCounts()">
+                    <span>
+                        <small class="text-muted me-1">{{ forloop.counter }}.</small>
+                        {{ stmt.statement_text }}
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="text-center text-muted py-5">
+        <p>This framework has no areas or statements to personalise.</p>
+    </div>
+    {% endfor %}
+
+    <div class="d-flex justify-content-end mt-3 mb-4">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-check-lg me-1"></i>Save Personalisation
+        </button>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function updateCounts() {
+    // Update total selected count
+    const all = document.querySelectorAll('.stmt-cb');
+    const checked = document.querySelectorAll('.stmt-cb:checked');
+    document.getElementById('selected-count').textContent = checked.length;
+
+    // Update per-area badges
+    document.querySelectorAll('.area-badge').forEach(badge => {
+        const areaId = badge.dataset.area;
+        const areaChecked = document.querySelectorAll(`.stmt-cb[data-area="${areaId}"]:checked`).length;
+        badge.textContent = areaChecked;
+        badge.className = 'badge area-badge ' + (areaChecked > 0 ? 'bg-success' : 'bg-secondary');
+    });
+}
+function toggleAll(state) {
+    document.querySelectorAll('.stmt-cb').forEach(cb => cb.checked = state);
+    updateCounts();
+}
+function toggleArea(areaId, state) {
+    document.querySelectorAll(`.stmt-cb[data-area="${areaId}"]`).forEach(cb => cb.checked = state);
+    updateCounts();
+}
+// Initial count on page load
+document.addEventListener('DOMContentLoaded', updateCounts);
+</script>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Review Target — {{ target.student.full_name }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <h4 class="mb-1">
+            <i class="bi bi-chat-left-text text-primary me-2"></i>Add Review
+        </h4>
+        <p class="text-muted mb-3">{{ target.title|truncatechars:80 }}</p>
+
+        <div class="mb-3">
+            <span class="badge
+                {% if target.status == 'MET' or target.status == 'EXCEEDED' %}bg-success
+                {% elif target.status == 'IN_PROGRESS' %}bg-primary
+                {% elif target.status == 'PARTIALLY_MET' %}bg-warning text-dark
+                {% else %}bg-secondary
+                {% endif %}">
+                Current: {{ target.get_status_display }}
+            </span>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="mb-3">
+                <label for="status" class="form-label">New Status <span class="text-danger">*</span></label>
+                <select class="form-select" id="status" name="status" required>
+                    <option value="">— Select —</option>
+                    {% for code, label in status_choices %}
+                    <option value="{{ code }}" {% if code == target.status %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="review_date" class="form-label">Review Date <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" id="review_date" name="review_date"
+                       value="{{ today }}" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="notes" class="form-label">Notes</label>
+                <textarea class="form-control" id="notes" name="notes" rows="4"
+                          placeholder="Observations, progress notes..."></textarea>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg me-1"></i>Save Review
+                </button>
+                <a href="{% url 'evidence:ehcp_target_detail' target.pk %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

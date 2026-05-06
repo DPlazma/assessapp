@@ -1,0 +1,18 @@
+<!-- Attention Needed Banner -->
+{% with items=widget.extra_context.attention_items %}
+{% if items %}
+<div class="d-flex flex-column gap-2">
+    {% for item in items %}
+    <div class="d-flex align-items-center p-2 rounded bg-{{ item.colour }} bg-opacity-10">
+        <i class="bi {{ item.icon }} text-{{ item.colour }} me-3" style="font-size: 1.2rem;"></i>
+        <span class="small fw-semibold">{{ item.text }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center text-muted py-3">
+    <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
+    <p class="small mb-0 mt-2">Nothing needs your attention right now.</p>
+</div>
+{% endif %}
+{% endwith %}

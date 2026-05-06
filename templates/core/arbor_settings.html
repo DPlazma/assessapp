@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Arbor Integration — AssessApp{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'core:setup_hub' %}" class="text-decoration-none">
+        <i class="bi bi-arrow-left me-1"></i>Back to Setup
+    </a>
+</div>
+
+<h4 class="mb-4"><i class="bi bi-cloud-arrow-up me-2"></i>Arbor Integration</h4>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+
+            <!-- Master toggle -->
+            <div class="form-check form-switch mb-4">
+                <input class="form-check-input" type="checkbox" id="enabled" name="enabled"
+                       {% if arbor.enabled %}checked{% endif %}>
+                <label class="form-check-label fw-semibold" for="enabled">
+                    Enable Arbor integration
+                </label>
+                <div class="form-text">When disabled, no data will be sent to Arbor.</div>
+            </div>
+
+            <hr>
+
+            <!-- Base URL -->
+            <div class="mb-3">
+                <label for="base_url" class="form-label fw-semibold">School Arbor URL</label>
+                <input type="url" class="form-control" id="base_url" name="base_url"
+                       value="{{ arbor.base_url }}"
+                       placeholder="https://your-school.uk.arbor.sc">
+                <div class="form-text">Your school's Arbor URL from the developer portal. REST and GraphQL endpoints are derived automatically.</div>
+            </div>
+
+            <!-- App Username -->
+            <div class="mb-3">
+                <label for="app_username" class="form-label fw-semibold">App Username</label>
+                <input type="text" class="form-control" id="app_username" name="app_username"
+                       value="{{ arbor.app_username }}" autocomplete="off"
+                       placeholder="your-app-username">
+                <div class="form-text">The username you set when creating your app in the Arbor developer portal.</div>
+            </div>
+
+            <!-- API Key -->
+            <div class="mb-3">
+                <label for="api_key" class="form-label fw-semibold">API Key</label>
+                <input type="password" class="form-control" id="api_key" name="api_key"
+                       value="{{ arbor.api_key }}" autocomplete="off"
+                       placeholder="arbor-api-key">
+                <div class="form-text">School-specific API key from the developer portal. Stored securely.</div>
+            </div>
+
+            <div class="d-flex gap-2 mb-3">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle me-1"></i>Save Settings
+                </button>
+                <a href="{% url 'core:setup_hub' %}" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+
+        <hr>
+
+        <!-- Connection test -->
+        <h6 class="mb-3"><i class="bi bi-plug me-1"></i>Test Connection</h6>
+        <p class="text-muted small">Save your settings first, then click below to verify the connection to Arbor.</p>
+        <button type="button" class="btn btn-outline-info" id="btn-test">
+            <i class="bi bi-lightning-charge me-1"></i>Test Connection
+        </button>
+        <div id="test-result" class="mt-2" style="display:none;"></div>
+
+        {% if arbor.last_connected %}
+        <div class="mt-2 small text-muted">
+            <i class="bi bi-check-circle-fill text-success me-1"></i>
+            Last connected: {{ arbor.last_connected|date:"d-m-Y H:i" }}
+        </div>
+        {% endif %}
+
+        {% if arbor.enabled %}
+        <hr>
+
+        <!-- Quick links -->
+        <h6 class="mb-3"><i class="bi bi-link-45deg me-1"></i>Next Steps</h6>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'core:arbor_import_preview' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-cloud-download me-1"></i>Import Students, Staff &amp; Classes
+            </a>
+            <a href="{% url 'core:arbor_discover' %}" class="btn btn-outline-primary">
+                <i class="bi bi-search me-1"></i>Discover &amp; Map Entities
+            </a>
+            <a href="{% url 'core:arbor_sync' %}" class="btn btn-outline-success">
+                <i class="bi bi-arrow-repeat me-1"></i>Sync Dashboard
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('btn-test')?.addEventListener('click', function() {
+    var btn = this;
+    var result = document.getElementById('test-result');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Testing…';
+    result.style.display = 'none';
+
+    fetch('{% url "core:arbor_test_connection" %}', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+        },
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        result.style.display = 'block';
+        if (data.ok) {
+            result.className = 'mt-2 alert alert-success py-2';
+            result.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>' + data.msg;
+        } else {
+            result.className = 'mt-2 alert alert-danger py-2';
+            result.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>' + data.msg;
+        }
+    })
+    .catch(function(err) {
+        result.style.display = 'block';
+        result.className = 'mt-2 alert alert-danger py-2';
+        result.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i>Request failed: ' + err;
+    })
+    .finally(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-lightning-charge me-1"></i>Test Connection';
+    });
+});
+</script>
+{% endblock %}

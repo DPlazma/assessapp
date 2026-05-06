@@ -1,0 +1,22 @@
+<!-- Quick Actions — role-aware shortcuts -->
+<div class="d-grid gap-2">
+    <a href="{% url 'evidence:quick_evidence_upload' %}" class="btn btn-outline-primary btn-sm text-start">
+        <i class="bi bi-camera-video me-2"></i>Record Evidence
+    </a>
+    <a href="{% url 'staff:cover_class' %}" class="btn btn-outline-secondary btn-sm text-start">
+        <i class="bi bi-arrow-left-right me-2"></i>Cover a Class
+    </a>
+    <a href="{% url 'reports:index' %}" class="btn btn-outline-secondary btn-sm text-start">
+        <i class="bi bi-bar-chart-line me-2"></i>View Reports
+    </a>
+    {% if is_slt or is_subject_lead %}
+    <a href="{% url 'assessments:school_progress' %}" class="btn btn-outline-secondary btn-sm text-start">
+        <i class="bi bi-building me-2"></i>School Progress
+    </a>
+    {% endif %}
+    {% if is_slt %}
+    <a href="{% url 'core:setup_hub' %}" class="btn btn-outline-secondary btn-sm text-start">
+        <i class="bi bi-gear me-2"></i>Setup
+    </a>
+    {% endif %}
+</div>

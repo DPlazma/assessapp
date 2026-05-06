@@ -1,0 +1,45 @@
+<!-- Class Overview - stat cards row -->
+<div class="row g-3">
+    <div class="col-6 col-md-3">
+        <div class="card border-0 bg-primary bg-opacity-10 h-100">
+            <div class="card-body text-center py-3">
+                <i class="bi bi-people-fill text-primary" style="font-size: 1.5rem;"></i>
+                <div class="fs-3 fw-bold text-primary mt-1">{{ widget.extra_context.student_count }}</div>
+                <div class="small text-muted">Students</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 bg-success bg-opacity-10 h-100">
+            <div class="card-body text-center py-3">
+                <i class="bi bi-pencil-square text-success" style="font-size: 1.5rem;"></i>
+                <div class="fs-3 fw-bold text-success mt-1">{{ widget.extra_context.assessments_this_term }}</div>
+                <div class="small text-muted">Assessments this term</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 bg-warning bg-opacity-10 h-100">
+            <div class="card-body text-center py-3">
+                <i class="bi bi-camera-video text-warning" style="font-size: 1.5rem;"></i>
+                <div class="fs-3 fw-bold text-warning mt-1">{{ widget.extra_context.evidence_this_term }}</div>
+                <div class="small text-muted">Evidence this term</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card border-0 bg-info bg-opacity-10 h-100">
+            <div class="card-body text-center py-3">
+                <i class="bi bi-calendar3 text-info" style="font-size: 1.5rem;"></i>
+                <div class="fw-bold mt-1">
+                    {% if widget.extra_context.current_term %}
+                        {{ widget.extra_context.current_term }}
+                    {% else %}
+                        <span class="text-muted">No term set</span>
+                    {% endif %}
+                </div>
+                <div class="small text-muted">Current term</div>
+            </div>
+        </div>
+    </div>
+</div>

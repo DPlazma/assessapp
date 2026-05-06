@@ -1,0 +1,481 @@
+{% extends "base.html" %}
+{% load assess_tags %}
+{% block title %}{{ student.full_name }} — {{ subject.name }} — AssessApp{% endblock %}
+
+{% block content %}
+{% include "students/_student_nav.html" with student_nav="assess" %}
+
+<div class="d-flex align-items-center mb-4">
+    <h5 class="mb-0">{{ subject.name }}</h5>
+    {% if frameworks|length > 1 %}
+    <div class="ms-auto">
+        <select class="form-select form-select-sm" style="width: auto;"
+                onchange="if(this.value){location.href='?framework='+this.value}else{location.href=location.pathname}">
+            <option value="">All Frameworks</option>
+            {% for fw in frameworks %}
+            <option value="{{ fw.pk }}" {% if selected_framework == fw.pk|stringformat:"d" %}selected{% endif %}>
+                {{ fw.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
+</div>
+
+{% if ai_available %}
+<div class="card mb-3 border-primary border-opacity-25" id="ai-card">
+    <div class="card-header bg-light d-flex align-items-center justify-content-between">
+        <h6 class="mb-0"><i class="bi bi-robot me-2"></i>AI Next Steps</h6>
+        <button class="btn btn-outline-primary btn-sm" type="button"
+                data-bs-toggle="collapse" data-bs-target="#ai-options-panel">
+            <i class="bi bi-stars me-1"></i>Suggest Next Steps
+        </button>
+    </div>
+    <div class="card-body">
+        {# ── Stage 1: Options panel ── #}
+        <div class="collapse" id="ai-options-panel">
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold small text-muted mb-1">Learner profile</label>
+                    <div class="d-flex flex-wrap gap-1">
+                        {% for val, label in cohort_options %}
+                        <div class="form-check form-check-inline me-0">
+                            <input class="form-check-input ai-cohort" type="checkbox"
+                                   value="{{ val }}" id="cohort-{{ val }}">
+                            <label class="form-check-label small" for="cohort-{{ val }}">{{ label }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold small text-muted mb-1">Generate</label>
+                    <div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="ai-mode"
+                                   id="mode-targets" value="targets" checked>
+                            <label class="form-check-label small" for="mode-targets">
+                                EHCP targets with small steps
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="ai-mode"
+                                   id="mode-steps" value="steps_only">
+                            <label class="form-check-label small" for="mode-steps">
+                                Small steps only (teaching activities)
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="ai-mode"
+                                   id="mode-strategies" value="strategies">
+                            <label class="form-check-label small" for="mode-strategies">
+                                Teaching strategies &amp; approaches
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold small text-muted mb-1">EHCP outcome area</label>
+                    <select class="form-select form-select-sm" id="ai-outcome">
+                        <option value="">Auto-detect from subject</option>
+                        {% for outcome in ehcp_outcomes %}
+                        <option value="{{ outcome.pk }}">{{ outcome.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text small mt-1">Used when saving targets</div>
+                </div>
+            </div>
+            <div class="text-end">
+                <button class="btn btn-primary btn-sm" type="button" id="ai-generate-btn"
+                        onclick="aiGenerate()">
+                    <i class="bi bi-stars me-1"></i>Generate Suggestions
+                </button>
+            </div>
+            <hr class="my-2">
+        </div>
+
+        {# ── Stage 2: Results area ── #}
+        <div id="ai-next-steps">
+            <p class="text-muted text-center mb-0 small">
+                <i class="bi bi-lightbulb me-1"></i>Get AI-powered suggestions for what to teach {{ student.first_name }} next in {{ subject.name }}.
+            </p>
+        </div>
+        <div id="ai-next-spinner" class="htmx-indicator text-center py-2" style="display:none;">
+            <div class="spinner-border spinner-border-sm text-primary me-1" role="status"></div>
+            <span class="text-muted small">Analysing progress and generating suggestions…</span>
+        </div>
+    </div>
+</div>
+
+<script>
+function aiGenerate() {
+    const cohorts = [...document.querySelectorAll('.ai-cohort:checked')].map(c => c.value);
+    const mode = document.querySelector('input[name="ai-mode"]:checked').value;
+    const outcome = document.getElementById('ai-outcome').value;
+    const btn = document.getElementById('ai-generate-btn');
+    const spinner = document.getElementById('ai-next-spinner');
+    const results = document.getElementById('ai-next-steps');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating…';
+    spinner.style.display = '';
+    results.innerHTML = '';
+
+    fetch("{% url 'assessments:ai_next_steps' student.pk subject.pk %}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({cohorts, mode, outcome_id: outcome})
+    })
+    .then(r => r.json())
+    .then(data => {
+        spinner.style.display = 'none';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-stars me-1"></i>Regenerate';
+        if (data.error) {
+            results.innerHTML = '<div class="alert alert-danger alert-sm">' + data.error + '</div>';
+            return;
+        }
+        renderSuggestions(data.suggestions, data.mode);
+    })
+    .catch(err => {
+        spinner.style.display = 'none';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-stars me-1"></i>Generate Suggestions';
+        results.innerHTML = '<div class="alert alert-danger">Request failed — please try again.</div>';
+    });
+}
+
+function renderSuggestions(suggestions, mode) {
+    const container = document.getElementById('ai-next-steps');
+    if (!suggestions || !suggestions.length) {
+        container.innerHTML = '<p class="text-muted text-center">No suggestions generated.</p>';
+        return;
+    }
+
+    let html = '<div class="small text-muted mb-2"><i class="bi bi-pencil me-1"></i>Edit suggestions below, then save the ones you want.</div>';
+
+    suggestions.forEach((s, i) => {
+        const checked = 'checked';
+        html += `<div class="card mb-2 border-start border-3 border-primary" id="suggestion-${i}">
+            <div class="card-body py-2 px-3">
+                <div class="d-flex align-items-start gap-2">
+                    <input type="checkbox" class="form-check-input mt-1 ai-select" data-idx="${i}" ${checked}>
+                    <div class="flex-grow-1">
+                        <input type="text" class="form-control form-control-sm fw-semibold mb-1 ai-title"
+                               data-idx="${i}" value="${escHtml(s.title)}">`;
+
+        if (s.rationale) {
+            html += `<p class="text-muted small mb-1">${escHtml(s.rationale)}</p>`;
+        }
+
+        if (s.small_steps && s.small_steps.length) {
+            html += `<div class="ms-2">`;
+            s.small_steps.forEach((step, j) => {
+                html += `<div class="d-flex align-items-center gap-1 mb-1">
+                    <span class="badge bg-secondary">${step.letter}</span>
+                    <input type="text" class="form-control form-control-sm ai-step"
+                           data-idx="${i}" data-step="${j}" value="${escHtml(step.description)}">
+                    <button class="btn btn-sm btn-outline-danger py-0 px-1" type="button"
+                            onclick="this.closest('.d-flex').remove()" title="Remove step">&times;</button>
+                </div>`;
+            });
+            html += `<button class="btn btn-outline-secondary btn-sm py-0 mt-1" type="button"
+                        onclick="addStep(this, ${i})">
+                        <i class="bi bi-plus me-1"></i>Add step</button>`;
+            html += `</div>`;
+        }
+
+        html += `</div>
+                    <button class="btn btn-sm btn-outline-danger py-0 px-1" type="button"
+                            onclick="document.getElementById('suggestion-${i}').remove()"
+                            title="Remove suggestion">&times;</button>
+                </div>
+            </div>
+        </div>`;
+    });
+
+    if (mode === 'targets' || mode === 'steps_only') {
+        html += `<div class="text-end mt-2">
+            <button class="btn btn-success btn-sm" type="button" onclick="saveSuggestions()">
+                <i class="bi bi-check-lg me-1"></i>Save Selected as EHCP Targets
+            </button>
+        </div>`;
+    }
+
+    container.innerHTML = html;
+}
+
+function addStep(btn, idx) {
+    const wrapper = btn.parentElement;
+    const existing = wrapper.querySelectorAll('.ai-step[data-idx="' + idx + '"]');
+    const nextLetter = String.fromCharCode(65 + existing.length);
+    const div = document.createElement('div');
+    div.className = 'd-flex align-items-center gap-1 mb-1';
+    div.innerHTML = `<span class="badge bg-secondary">${nextLetter}</span>
+        <input type="text" class="form-control form-control-sm ai-step"
+               data-idx="${idx}" data-step="${existing.length}" value="">
+        <button class="btn btn-sm btn-outline-danger py-0 px-1" type="button"
+                onclick="this.closest('.d-flex').remove()" title="Remove step">&times;</button>`;
+    wrapper.insertBefore(div, btn);
+}
+
+function saveSuggestions() {
+    const cards = document.querySelectorAll('[id^="suggestion-"]');
+    const targets = [];
+    cards.forEach(card => {
+        const cb = card.querySelector('.ai-select');
+        if (!cb || !cb.checked) return;
+        const title = card.querySelector('.ai-title').value.trim();
+        if (!title) return;
+        const steps = [...card.querySelectorAll('.ai-step')].map((inp, j) => ({
+            letter: String.fromCharCode(65 + j),
+            description: inp.value.trim()
+        })).filter(s => s.description);
+        targets.push({title, small_steps: steps});
+    });
+
+    if (!targets.length) {
+        alert('Select at least one suggestion to save.');
+        return;
+    }
+
+    const outcome = document.getElementById('ai-outcome').value;
+    const btn = event.target;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving…';
+
+    fetch("{% url 'assessments:ai_save_suggestions' student.pk subject.pk %}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({targets, outcome_id: outcome})
+    })
+    .then(r => r.json())
+    .then(data => {
+        btn.disabled = false;
+        if (data.ok) {
+            const results = document.getElementById('ai-next-steps');
+            results.innerHTML = `<div class="alert alert-success">
+                <i class="bi bi-check-circle me-1"></i>${data.msg}
+            </div>`;
+        } else {
+            btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Save Selected as EHCP Targets';
+            alert(data.msg || 'Save failed.');
+        }
+    })
+    .catch(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Save Selected as EHCP Targets';
+        alert('Request failed — please try again.');
+    });
+}
+
+function escHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML.replace(/"/g, '&quot;');
+}
+</script>
+{% endif %}
+
+{% if not can_assess %}
+<div class="alert alert-info">
+    <i class="bi bi-eye me-1"></i>
+    View only — you are not assigned to or covering this student's class.
+</div>
+{% endif %}
+
+<style>
+    .neds-badges .badge { font-size: 0.7rem; min-width: 2.2rem; }
+</style>
+
+{% for area in areas %}
+<div class="card mb-3" data-area-id="{{ area.pk }}">
+    <div class="card-header bg-light d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2 me-auto"
+             data-bs-toggle="collapse" data-bs-target="#area-collapse-{{ area.pk }}"
+             role="button" style="cursor: pointer; flex: 1;">
+            <i class="bi bi-chevron-down collapse-icon"></i>
+            <strong>{{ area.name }}</strong>
+            <span class="neds-badges d-flex gap-1 align-items-center">
+                <span class="badge bg-secondary" title="Not Yet Assessed">N <span class="neds-count" data-scope="area" data-id="{{ area.pk }}" data-status="NYA">{{ area.neds_n }}</span></span>
+                <span class="badge bg-danger" title="Emerging">E <span class="neds-count" data-scope="area" data-id="{{ area.pk }}" data-status="EME">{{ area.neds_e }}</span></span>
+                <span class="badge bg-warning text-dark" title="Developing">D <span class="neds-count" data-scope="area" data-id="{{ area.pk }}" data-status="DEV">{{ area.neds_d }}</span></span>
+                <span class="badge bg-success" title="Secure">S <span class="neds-count" data-scope="area" data-id="{{ area.pk }}" data-status="SEC">{{ area.neds_s }}</span></span>
+                <span class="text-muted small">/ {{ area.neds_total }}</span>
+            </span>
+        </div>
+        {% if student.class_group and area.statements.first %}
+        <a href="{% url 'assessments:bulk_assess' student.class_group.pk area.statements.first.pk %}"
+           class="btn btn-sm btn-outline-secondary"
+           title="Bulk assess this area">
+            <i class="bi bi-grid-3x3-gap me-1"></i>Bulk
+        </a>
+        {% endif %}
+    </div>
+    <div class="collapse show" id="area-collapse-{{ area.pk }}">
+    <div class="card-body p-2">
+        {% if area.sub_areas.count %}
+            {% for sub_area in area.sub_areas.all %}
+            <div class="mb-3" data-sub-area-id="{{ sub_area.pk }}">
+                <div class="border-bottom pb-1 mb-2 d-flex align-items-center gap-2"
+                     data-bs-toggle="collapse" data-bs-target="#sub-collapse-{{ sub_area.pk }}"
+                     role="button" style="cursor: pointer;">
+                    <i class="bi bi-chevron-down collapse-icon"></i>
+                    <strong class="text-info me-auto"><i class="bi bi-layers me-1"></i>{{ sub_area.name }}</strong>
+                    <span class="neds-badges d-flex gap-1 align-items-center">
+                        <span class="badge bg-secondary" title="Not Yet Assessed">N <span class="neds-count" data-scope="sub" data-id="{{ sub_area.pk }}" data-status="NYA">{{ sub_area.neds_n }}</span></span>
+                        <span class="badge bg-danger" title="Emerging">E <span class="neds-count" data-scope="sub" data-id="{{ sub_area.pk }}" data-status="EME">{{ sub_area.neds_e }}</span></span>
+                        <span class="badge bg-warning text-dark" title="Developing">D <span class="neds-count" data-scope="sub" data-id="{{ sub_area.pk }}" data-status="DEV">{{ sub_area.neds_d }}</span></span>
+                        <span class="badge bg-success" title="Secure">S <span class="neds-count" data-scope="sub" data-id="{{ sub_area.pk }}" data-status="SEC">{{ sub_area.neds_s }}</span></span>
+                        <span class="text-muted small">/ {{ sub_area.neds_total }}</span>
+                    </span>
+                </div>
+                <div class="collapse show" id="sub-collapse-{{ sub_area.pk }}">
+                {% for statement in sub_area.statements.all %}
+                {% if personalised_stmt_ids == None or statement.pk in personalised_stmt_ids %}
+                {% with record=assessment_map|get:statement.pk %}
+                <div class="statement-row" id="stmt-{{ statement.pk }}"
+                     data-area-id="{{ statement.area_id }}"
+                     data-sub-area-id="{{ statement.sub_area_id|default:'' }}"
+                     data-status="{% if record %}{{ record.status }}{% else %}NYA{% endif %}">
+                    <div class="statement-text">{{ statement.statement_text }}</div>
+                    <div class="d-flex gap-1">
+                        {% for code, label in status_choices %}
+                        {% if can_assess %}
+                        <button class="status-btn {% if record and record.status == code %}active status-{{ code }}{% else %}btn-outline-secondary{% endif %}"
+                                hx-post="{% url 'assessments:record_assessment' student.pk statement.pk %}"
+                                hx-vals='{"status": "{{ code }}"}'
+                                hx-target="#stmt-{{ statement.pk }}"
+                                hx-swap="outerHTML"
+                                title="{{ label }}">
+                            {{ label.0 }}
+                        </button>
+                        {% else %}
+                        <span class="status-btn {% if record and record.status == code %}active status-{{ code }}{% else %}btn-outline-secondary{% endif %}"
+                              title="{{ label }}">
+                            {{ label.0 }}
+                        </span>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endwith %}
+                {% endif %}
+                {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+            {# Show any ungrouped statements #}
+            {% for statement in area.statements.all %}
+            {% if not statement.sub_area %}
+            {% if personalised_stmt_ids == None or statement.pk in personalised_stmt_ids %}
+            {% with record=assessment_map|get:statement.pk %}
+            <div class="statement-row" id="stmt-{{ statement.pk }}"
+                 data-area-id="{{ statement.area_id }}"
+                 data-sub-area-id=""
+                 data-status="{% if record %}{{ record.status }}{% else %}NYA{% endif %}">
+                <div class="statement-text">{{ statement.statement_text }}</div>
+                <div class="d-flex gap-1">
+                    {% for code, label in status_choices %}
+                    {% if can_assess %}
+                    <button class="status-btn {% if record and record.status == code %}active status-{{ code }}{% else %}btn-outline-secondary{% endif %}"
+                            hx-post="{% url 'assessments:record_assessment' student.pk statement.pk %}"
+                            hx-vals='{"status": "{{ code }}"}'
+                            hx-target="#stmt-{{ statement.pk }}"
+                            hx-swap="outerHTML"
+                            title="{{ label }}">
+                        {{ label.0 }}
+                    </button>
+                    {% else %}
+                    <span class="status-btn {% if record and record.status == code %}active status-{{ code }}{% else %}btn-outline-secondary{% endif %}"
+                          title="{{ label }}">
+                        {{ label.0 }}
+                    </span>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endwith %}
+            {% endif %}
+            {% endif %}
+            {% endfor %}
+        {% else %}
+            {% for statement in area.statements.all %}
+            {% if personalised_stmt_ids == None or statement.pk in personalised_stmt_ids %}
+            {% with record=assessment_map|get:statement.pk %}
+            <div class="statement-row" id="stmt-{{ statement.pk }}"
+                 data-area-id="{{ statement.area_id }}"
+                 data-sub-area-id=""
+                 data-status="{% if record %}{{ record.status }}{% else %}NYA{% endif %}">
+                <div class="statement-text">{{ statement.statement_text }}</div>
+                <div class="d-flex gap-1">
+                    {% for code, label in status_choices %}
+                    {% if can_assess %}
+                    <button class="status-btn {% if record and record.status == code %}active status-{{ code }}{% else %}btn-outline-secondary{% endif %}"
+                            hx-post="{% url 'assessments:record_assessment' student.pk statement.pk %}"
+                            hx-vals='{"status": "{{ code }}"}'
+                            hx-target="#stmt-{{ statement.pk }}"
+                            hx-swap="outerHTML"
+                            title="{{ label }}">
+                        {{ label.0 }}
+                    </button>
+                    {% else %}
+                    <span class="status-btn {% if record and record.status == code %}active status-{{ code }}{% else %}btn-outline-secondary{% endif %}"
+                          title="{{ label }}">
+                        {{ label.0 }}
+                    </span>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endwith %}
+            {% endif %}
+            {% endfor %}
+        {% endif %}
+    </div>
+    </div>
+</div>
+{% empty %}
+<div class="text-center py-5 text-muted">
+    <p>No assessment areas configured for {{ subject.name }}.</p>
+</div>
+{% endfor %}
+
+<script>
+// Live-update NEDS counters after HTMX swaps a statement row
+document.body.addEventListener('htmx:afterSettle', function(evt) {
+    var row = evt.detail.elt;
+    if (!row || !row.classList || !row.classList.contains('statement-row')) return;
+    var areaId = row.dataset.areaId;
+    var subAreaId = row.dataset.subAreaId;
+    if (areaId) recountNeds('area', areaId);
+    if (subAreaId) recountNeds('sub', subAreaId);
+});
+
+function recountNeds(scope, id) {
+    var container;
+    if (scope === 'area') {
+        container = document.querySelector('[data-area-id="' + id + '"]');
+    } else {
+        container = document.querySelector('[data-sub-area-id="' + id + '"]');
+    }
+    if (!container) return;
+    var rows = container.querySelectorAll('.statement-row');
+    var counts = {NYA: 0, EME: 0, DEV: 0, SEC: 0};
+    rows.forEach(function(r) {
+        var s = r.dataset.status || 'NYA';
+        if (counts.hasOwnProperty(s)) counts[s]++;
+    });
+    ['NYA', 'EME', 'DEV', 'SEC'].forEach(function(s) {
+        var el = document.querySelector('.neds-count[data-scope="' + scope + '"][data-id="' + id + '"][data-status="' + s + '"]');
+        if (el) el.textContent = counts[s];
+    });
+}
+</script>
+
+{% endblock %}

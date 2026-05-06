@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}AI Face Blur — {{ item.title }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'evidence:evidence_detail' item.pk %}" class="text-decoration-none">
+        <i class="bi bi-arrow-left me-1"></i>Back to evidence
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-header bg-white">
+                <h5 class="mb-0"><i class="bi bi-person-bounding-box me-2"></i>AI Face Blur — Select Faces</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <video controls style="max-width: 100%; border-radius: .5rem;">
+                        <source src="{{ item.file.url }}?v={{ item.updated_at|date:'U' }}" type="video/mp4">
+                    </video>
+                </div>
+
+                <div class="alert alert-info d-flex align-items-start mb-3">
+                    <i class="bi bi-robot me-2 mt-1"></i>
+                    <div>
+                        <strong>{{ clusters|length }} unique face{{ clusters|length|pluralize }} detected</strong>
+                        from {{ total_faces }} appearance{{ total_faces|pluralize }} across the video.
+                        Click each face to toggle <span class="badge bg-success">Keep</span>
+                        or <span class="badge bg-danger">Blur</span>.
+                    </div>
+                </div>
+
+                <div class="d-flex flex-wrap gap-3 mb-4" id="face-grid">
+                    {% for face in clusters %}
+                    <div class="face-card text-center" data-id="{{ face.id }}" data-keep="false"
+                         style="cursor: pointer; width: 110px;">
+                        <div class="position-relative d-inline-block border border-3 border-danger rounded-3 overflow-hidden face-frame"
+                             style="width: 90px; height: 90px;">
+                            <img src="data:image/jpeg;base64,{{ face.crop_b64 }}"
+                                 alt="Face {{ face.id|add:1 }}"
+                                 style="width: 100%; height: 100%; object-fit: cover;">
+                            <span class="position-absolute top-0 start-0 badge rounded-0 face-badge bg-danger"
+                                  style="font-size: .65rem;">
+                                BLUR
+                            </span>
+                        </div>
+                        <div class="mt-1 small text-muted">
+                            Face {{ face.id|add:1 }}
+                            <br><span class="text-muted" style="font-size: .7rem;">{{ face.appearances }}× seen</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <form method="post" action="{% url 'evidence:video_apply_face_blur' item.pk %}" id="face-blur-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="keep_ids" id="keep-ids" value="">
+                    <div class="d-flex gap-2 flex-wrap">
+                        <button type="submit" class="btn btn-primary" id="btn-process">
+                            <i class="bi bi-check-circle me-1"></i>Apply Blur
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="btn-keep-all">
+                            <i class="bi bi-eye me-1"></i>Keep All
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="btn-blur-all">
+                            <i class="bi bi-eye-slash me-1"></i>Blur All
+                        </button>
+                        <a href="{% url 'evidence:evidence_detail' item.pk %}" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h6 class="mb-0"><i class="bi bi-info-circle me-1"></i>How it works</h6>
+            </div>
+            <div class="card-body small">
+                <ol class="mb-0 ps-3">
+                    <li class="mb-2">The AI scanned the video and found the face{{ clusters|length|pluralize }} shown</li>
+                    <li class="mb-2"><strong>Click a face</strong> to toggle between
+                        <span class="badge bg-success">Keep</span> (visible) and
+                        <span class="badge bg-danger">Blur</span></li>
+                    <li class="mb-2">Typically you'd <strong>keep the student</strong> and blur everyone else</li>
+                    <li class="mb-2">Click <strong>Apply Blur</strong> when ready</li>
+                </ol>
+                <hr>
+                <p class="text-muted mb-0">
+                    <i class="bi bi-exclamation-triangle me-1"></i>This replaces the original video.
+                    Download a copy first if you want to keep the unblurred version.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const cards = document.querySelectorAll('.face-card');
+    const keepInput = document.getElementById('keep-ids');
+    const form = document.getElementById('face-blur-form');
+    const btn = document.getElementById('btn-process');
+
+    function syncForm() {
+        const kept = [];
+        cards.forEach(c => {
+            if (c.dataset.keep === 'true') kept.push(c.dataset.id);
+        });
+        keepInput.value = kept.join(',');
+    }
+
+    function setKeep(card, keep) {
+        card.dataset.keep = keep ? 'true' : 'false';
+        const frame = card.querySelector('.face-frame');
+        const badge = card.querySelector('.face-badge');
+        if (keep) {
+            frame.classList.remove('border-danger');
+            frame.classList.add('border-success');
+            badge.classList.remove('bg-danger');
+            badge.classList.add('bg-success');
+            badge.textContent = 'KEEP';
+        } else {
+            frame.classList.remove('border-success');
+            frame.classList.add('border-danger');
+            badge.classList.remove('bg-success');
+            badge.classList.add('bg-danger');
+            badge.textContent = 'BLUR';
+        }
+        syncForm();
+    }
+
+    cards.forEach(card => {
+        card.addEventListener('click', () => {
+            setKeep(card, card.dataset.keep !== 'true');
+        });
+    });
+
+    document.getElementById('btn-keep-all').addEventListener('click', () => {
+        cards.forEach(c => setKeep(c, true));
+    });
+    document.getElementById('btn-blur-all').addEventListener('click', () => {
+        cards.forEach(c => setKeep(c, false));
+    });
+
+    form.addEventListener('submit', function() {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Processing…';
+    });
+
+    syncForm();
+})();
+</script>
+{% endblock %}
