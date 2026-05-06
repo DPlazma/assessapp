@@ -37,6 +37,13 @@ def setup_hub(request):
             "colour": "primary",
         },
         {
+            "title": "Subjects",
+            "icon": "bi-book",
+            "desc": "Manage taught subjects, applicable pathways/phases, and ordering.",
+            "url": "core:subjects_manage",
+            "colour": "primary",
+        },
+        {
             "title": "Users",
             "icon": "bi-people",
             "desc": "Manage staff accounts and permissions.",
@@ -110,6 +117,117 @@ def classes_manage(request):
         })
 
     return render(request, "core/classes_manage.html", {
+        "rows": rows,
+        "pathway_choices": PATHWAY_CHOICES,
+        "phase_choices": PHASE_CHOICES,
+    })
+
+
+@slt_required
+def subjects_manage(request):
+    """SLT page to manage Subjects: name, applicable pathways/phases, order, active state.
+
+    Also supports adding / deleting subjects (with safety checks).
+    """
+    from students.models import Subject, PATHWAY_CHOICES, PHASE_CHOICES
+    from assessments.models import AssessmentArea, AssessmentRecord
+
+    if request.method == "POST":
+        action = request.POST.get("action", "save")
+
+        if action == "add":
+            name = request.POST.get("new_name", "").strip()
+            if not name:
+                messages.error(request, "Subject name is required.")
+            elif Subject.objects.filter(name__iexact=name).exists():
+                messages.error(request, f"A subject called {name!r} already exists.")
+            else:
+                Subject.objects.create(
+                    name=name,
+                    short_name=request.POST.get("new_short_name", "").strip()[:20],
+                    applicable_pathways=[c for c, _ in PATHWAY_CHOICES],
+                    applicable_phases=[1, 2],
+                    is_active=True,
+                    order=Subject.objects.count(),
+                )
+                messages.success(request, f"Created subject {name!r}.")
+            return redirect("core:subjects_manage")
+
+        if action == "delete":
+            sid = request.POST.get("subject_id")
+            try:
+                subj = Subject.objects.get(pk=sid)
+            except Subject.DoesNotExist:
+                messages.error(request, "Subject not found.")
+                return redirect("core:subjects_manage")
+            n_records = AssessmentRecord.objects.filter(statement__area__subject=subj).count()
+            n_areas = AssessmentArea.objects.filter(subject=subj).count()
+            if n_records > 0 or n_areas > 0:
+                messages.error(
+                    request,
+                    f"Cannot delete {subj.name!r}: it has {n_areas} assessment area(s) "
+                    f"and {n_records} record(s). Move or delete those first."
+                )
+            else:
+                subj.delete()
+                messages.success(request, f"Deleted subject {subj.name!r}.")
+            return redirect("core:subjects_manage")
+
+        # action == "save" — bulk update existing subjects
+        valid_pw = {c for c, _ in PATHWAY_CHOICES}
+        valid_ph = {n for n, _ in PHASE_CHOICES}
+        updated = 0
+        for s in Subject.objects.all():
+            new_name = request.POST.get(f"name_{s.pk}", s.name).strip() or s.name
+            new_short = request.POST.get(f"short_{s.pk}", "").strip()[:20]
+            new_order_raw = request.POST.get(f"order_{s.pk}", "").strip()
+            new_order = int(new_order_raw) if new_order_raw.isdigit() else s.order
+            new_active = request.POST.get(f"active_{s.pk}") == "on"
+            new_pathways = [p for p in request.POST.getlist(f"pathways_{s.pk}") if p in valid_pw]
+            new_phases = [int(p) for p in request.POST.getlist(f"phases_{s.pk}") if p.isdigit() and int(p) in valid_ph]
+
+            changed = False
+            if new_name != s.name:
+                # Avoid duplicate names
+                if Subject.objects.exclude(pk=s.pk).filter(name__iexact=new_name).exists():
+                    messages.warning(request, f"Skipped rename of {s.name!r}: another subject already uses {new_name!r}.")
+                else:
+                    s.name = new_name
+                    changed = True
+            if new_short != s.short_name:
+                s.short_name = new_short
+                changed = True
+            if new_order != s.order:
+                s.order = new_order
+                changed = True
+            if new_active != s.is_active:
+                s.is_active = new_active
+                changed = True
+            if list(new_pathways) != list(s.applicable_pathways or []):
+                s.applicable_pathways = new_pathways
+                changed = True
+            if list(new_phases) != list(s.applicable_phases or []):
+                s.applicable_phases = new_phases
+                changed = True
+            if changed:
+                s.save()
+                updated += 1
+
+        messages.success(request, f"Updated {updated} subject(s).")
+        return redirect("core:subjects_manage")
+
+    rows = []
+    for s in Subject.objects.all().order_by("order", "name"):
+        n_areas = AssessmentArea.objects.filter(subject=s).count()
+        n_records = AssessmentRecord.objects.filter(statement__area__subject=s).count()
+        rows.append({
+            "s": s,
+            "n_areas": n_areas,
+            "n_records": n_records,
+            "deletable": (n_areas == 0 and n_records == 0),
+        })
+
+    return render(request, "core/subjects_manage.html", {
         "rows": rows,
         "pathway_choices": PATHWAY_CHOICES,
         "phase_choices": PHASE_CHOICES,

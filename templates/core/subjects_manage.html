@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Subjects — AssessApp{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'core:setup_hub' %}">Setup</a></li>
+        <li class="breadcrumb-item active">Subjects</li>
+    </ol>
+</nav>
+
+<h3 class="mb-1"><i class="bi bi-book me-2"></i>Subjects</h3>
+<p class="text-muted">
+    Subjects are taught areas (Maths, English, etc). For each subject you can
+    set which pathways and phases it applies to, change its display order,
+    and toggle whether it's currently in use.
+</p>
+
+{% if messages %}
+    {% for m in messages %}
+        <div class="alert alert-{{ m.tags|default:'info' }} py-2">{{ m }}</div>
+    {% endfor %}
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="save">
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 5em;">Order</th>
+                    <th>Name</th>
+                    <th style="width: 7em;">Short</th>
+                    <th>Pathways</th>
+                    <th>Phases</th>
+                    <th class="text-center">Active</th>
+                    <th class="text-end">Usage</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rows %}
+                <tr>
+                    <td>
+                        <input type="number" class="form-control form-control-sm" name="order_{{ r.s.pk }}"
+                               value="{{ r.s.order }}" min="0" style="width: 5em;">
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm" name="name_{{ r.s.pk }}"
+                               value="{{ r.s.name }}" required>
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm" name="short_{{ r.s.pk }}"
+                               value="{{ r.s.short_name }}" maxlength="20">
+                    </td>
+                    <td>
+                        {% for code, label in pathway_choices %}
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" id="pw_{{ r.s.pk }}_{{ code }}"
+                                       name="pathways_{{ r.s.pk }}" value="{{ code }}"
+                                       {% if code in r.s.applicable_pathways %}checked{% endif %}>
+                                <label class="form-check-label small" for="pw_{{ r.s.pk }}_{{ code }}">{{ label }}</label>
+                            </div>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {% for n, label in phase_choices %}
+                            <div class="form-check form-check-inline">
+                                <input class="form-check-input" type="checkbox" id="ph_{{ r.s.pk }}_{{ n }}"
+                                       name="phases_{{ r.s.pk }}" value="{{ n }}"
+                                       {% if n in r.s.applicable_phases %}checked{% endif %}>
+                                <label class="form-check-label small" for="ph_{{ r.s.pk }}_{{ n }}">{{ label }}</label>
+                            </div>
+                        {% endfor %}
+                    </td>
+                    <td class="text-center">
+                        <div class="form-check form-switch d-inline-block">
+                            <input class="form-check-input" type="checkbox" name="active_{{ r.s.pk }}"
+                                   {% if r.s.is_active %}checked{% endif %}>
+                        </div>
+                    </td>
+                    <td class="text-end small text-muted">
+                        {{ r.n_areas }} area{{ r.n_areas|pluralize }}<br>
+                        {{ r.n_records }} record{{ r.n_records|pluralize }}
+                    </td>
+                    <td>
+                        {% if r.deletable %}
+                            <button type="submit" formnovalidate class="btn btn-sm btn-outline-danger"
+                                    name="_delete_{{ r.s.pk }}"
+                                    onclick="this.form.action.value='delete'; document.getElementById('del_id_{{ r.s.pk }}').name='subject_id'; return confirm('Delete subject {{ r.s.name|escapejs }}?');">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                            <input type="hidden" id="del_id_{{ r.s.pk }}" value="{{ r.s.pk }}">
+                        {% else %}
+                            <span class="text-muted small" title="Cannot delete: in use">
+                                <i class="bi bi-lock"></i>
+                            </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="8" class="text-muted">No subjects yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <button type="submit" class="btn btn-primary">
+        <i class="bi bi-save me-1"></i>Save changes
+    </button>
+    <a href="{% url 'core:setup_hub' %}" class="btn btn-link">Cancel</a>
+</form>
+
+<hr class="my-4">
+
+<h5><i class="bi bi-plus-circle me-1"></i>Add a new subject</h5>
+<form method="post" class="row g-2 mt-1">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="add">
+    <div class="col-md-5">
+        <input type="text" class="form-control" name="new_name" placeholder="Name (e.g. Computing)" required>
+    </div>
+    <div class="col-md-3">
+        <input type="text" class="form-control" name="new_short_name" placeholder="Short name (optional)" maxlength="20">
+    </div>
+    <div class="col-md-auto">
+        <button type="submit" class="btn btn-success">
+            <i class="bi bi-plus-lg me-1"></i>Add subject
+        </button>
+    </div>
+    <div class="col-12">
+        <small class="text-muted">
+            New subjects start applicable to all pathways and phases — adjust above and save.
+        </small>
+    </div>
+</form>
+
+<script>
+// Wire up the per-row delete buttons to set form action="delete" and the subject_id field.
+document.querySelectorAll('button[name^="_delete_"]').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+        var form = btn.closest('form');
+        var sid = btn.name.replace('_delete_', '');
+        // Switch the form into "delete" mode
+        form.querySelector('input[name="action"]').value = 'delete';
+        // Inject a subject_id field
+        var existing = form.querySelector('input[name="subject_id"]');
+        if (existing) existing.remove();
+        var inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = 'subject_id';
+        inp.value = sid;
+        form.appendChild(inp);
+    });
+});
+</script>
+{% endblock %}

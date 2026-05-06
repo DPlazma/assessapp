@@ -11,6 +11,7 @@ urlpatterns = [
     path("dashboard/reset-layout/", views.reset_widget_layout, name="reset_widget_layout"),
     path("setup/", views.setup_hub, name="setup_hub"),
     path("setup/classes/", views.classes_manage, name="classes_manage"),
+    path("setup/subjects/", views.subjects_manage, name="subjects_manage"),
     path("setup/academic-years/", views.academic_year_setup, name="academic_year_setup"),
     path("setup/academic-years/add/", views.create_academic_year, name="create_academic_year"),
     path("setup/academic-years/<int:pk>/edit/", views.edit_academic_year, name="edit_academic_year"),
