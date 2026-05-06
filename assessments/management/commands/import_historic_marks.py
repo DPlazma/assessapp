@@ -34,6 +34,34 @@ STATUS_MAP = {
     "emerging": "EME",
 }
 
+# Manual aliases: spreadsheet name (lower-cased, hyphens/spaces ignored) → canonical "First Last"
+# in the database. Used when the spreadsheet contains a typo or a different given/legal name.
+NAME_ALIASES = {
+    "abdul rahma narma": "Abdul Rahman Narma",
+    "kian linguard": "Kian Holyoake",
+    "azaih hayes": "Aziah Hayes",
+    "anastzja bieszczad": "Anastazja Bieszczad",
+    "cian o'neil": "Cian O'Neill",
+    "isaac machdo": "Isaac Machado",
+    "finlay warren": "Finley Warren",
+    "katie rowbottom-driver": "Katie Rowbotham-Driver",
+    "ella autumn davidson": "Ella-Autumn Davinson",
+    "lilly cross": "Lilly-Ann Cross",
+    "muhammad seedat": "Muhammad Yusuf Seedat",
+}
+
+
+def _normalise(name: str) -> str:
+    """Lower-case, collapse spaces, treat ' - ' / '-' / spaces around hyphens as the same.
+
+    'Jacob James - Hill' and 'Jacob-James Hill' both normalise to 'jacob james hill'."""
+    s = name.strip().lower()
+    # Replace any hyphen (with optional surrounding whitespace) with a single space.
+    import re as _re
+    s = _re.sub(r"\s*-\s*", " ", s)
+    s = _re.sub(r"\s+", " ", s)
+    return s
+
 
 class Command(BaseCommand):
     help = "Import historic assessment marks from a wide-format XLSX."
@@ -137,20 +165,37 @@ class Command(BaseCommand):
         self.stdout.write(f"Found {len(student_rows)} student rows.")
         self.stdout.write("")
 
-        # ── Match students by exact full-name match ─────────────────
+        # ── Match students ──────────────────────────────────────────
+        # Build two indexes on the DB:
+        #   1) normalised "first last" → Student
+        #   2) same, but also keyed by the canonical alias target
         all_students = list(Student.objects.filter(is_active=True))
-        name_index = {f"{s.first_name} {s.last_name}".strip().lower(): s for s in all_students}
+        name_index = {}
+        for s in all_students:
+            full = f"{s.first_name} {s.last_name}".strip()
+            name_index[_normalise(full)] = s
 
-        matched, unmatched = [], []
+        matched, unmatched, alias_used = [], [], []
         for row_idx, name, marks in student_rows:
-            key = name.lower()
+            key = _normalise(name)
             student = name_index.get(key)
+            if student is None:
+                # Try alias map
+                alias_target = NAME_ALIASES.get(key)
+                if alias_target:
+                    student = name_index.get(_normalise(alias_target))
+                    if student:
+                        alias_used.append((name, alias_target))
             if student:
                 matched.append((row_idx, name, student, marks))
             else:
                 unmatched.append((row_idx, name, marks))
 
         self.stdout.write(self.style.SUCCESS(f"Matched students:   {len(matched)}"))
+        if alias_used:
+            self.stdout.write(f"  ({len(alias_used)} via alias / hyphen-normalisation)")
+            for spreadsheet, target in alias_used:
+                self.stdout.write(f"    · {spreadsheet!r} → {target!r}")
         if unmatched:
             self.stdout.write(self.style.WARNING(f"Unmatched students: {len(unmatched)}"))
             for row_idx, name, marks in unmatched:
