@@ -202,15 +202,26 @@ class ArborClient:
         """)
         return data.get("RegistrationForm", [])
 
-    def fetch_staff(self):
-        """Fetch current staff members."""
+    def fetch_staff(self, include_inactive=False):
+        """Fetch current staff members.
+
+        Filters on Arbor's ``isActiveInSchool`` flag, which is more
+        reliable than ``leavingDate`` (some leavers never have a
+        leavingDate set but are flagged inactive instead).
+        """
         data = self.graphql("""
             { Staff {
-                id displayName leavingDate
+                id displayName leavingDate isActiveInSchool
                 person { legalFirstName legalLastName }
             } }
         """)
-        return [s for s in data.get("Staff", []) if not s.get("leavingDate")]
+        staff = data.get("Staff", [])
+        if include_inactive:
+            return staff
+        return [
+            s for s in staff
+            if s.get("isActiveInSchool") and not s.get("leavingDate")
+        ]
 
     def fetch_staff_class_links(self):
         """Fetch which staff are linked to which registration forms.
@@ -427,13 +438,13 @@ class ArborClient:
         if arbor_staff is None:
             staff_data = self.graphql("""
                 { Staff {
-                    id displayName leavingDate
+                    id displayName leavingDate isActiveInSchool
                     person { legalFirstName legalLastName }
                 } }
             """)
             arbor_staff = [
                 s for s in staff_data.get("Staff", [])
-                if not s.get("leavingDate")
+                if s.get("isActiveInSchool") and not s.get("leavingDate")
             ]
 
         staff_by_id = {int(s["id"]): s for s in arbor_staff}
@@ -462,13 +473,13 @@ class ArborClient:
         """
         data = self.graphql("""
             { Staff {
-                id leavingDate
+                id leavingDate isActiveInSchool
                 staffContracts { displayName }
             } }
         """)
         roles = {}
         for s in data.get("Staff", []):
-            if s.get("leavingDate"):
+            if s.get("leavingDate") or not s.get("isActiveInSchool"):
                 continue
             sid = int(s["id"])
             contracts = [
