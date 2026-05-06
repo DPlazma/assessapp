@@ -21,6 +21,12 @@ class StaffProfile(models.Model):
         related_name="staffprofile",
     )
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="teacher")
+    arbor_staff_id = models.PositiveIntegerField(
+        unique=True,
+        null=True,
+        blank=True,
+        help_text="Arbor Staff ID (matches Entra Employee ID without the 'Stf_' prefix).",
+    )
     lead_pathway = models.CharField(
         max_length=4,
         blank=True,

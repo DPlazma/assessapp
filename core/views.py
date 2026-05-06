@@ -1399,11 +1399,21 @@ def arbor_import_run(request):
 
                 if full in local_names:
                     staff_name_map[full] = local_names[full]
-                    # Update role if currently default "teacher" but contract says otherwise
                     user = local_names[full]
-                    profile = getattr(user, "staffprofile", None)
-                    if profile and profile.role == "teacher" and role in ("ta", "hlta"):
+                    profile, _ = StaffProfile.objects.get_or_create(
+                        user=user,
+                        defaults={"role": role},
+                    )
+                    changed = False
+                    # Stamp Arbor staff ID if missing
+                    if not profile.arbor_staff_id:
+                        profile.arbor_staff_id = arbor_id
+                        changed = True
+                    # Update role if currently default "teacher" but contract says otherwise
+                    if profile.role == "teacher" and role in ("ta", "hlta"):
                         profile.role = role
+                        changed = True
+                    if changed:
                         profile.save()
                     continue
 
@@ -1426,6 +1436,9 @@ def arbor_import_run(request):
                     StaffProfile.objects.get_or_create(
                         user=user,
                         defaults={"role": role},
+                    )
+                    StaffProfile.objects.filter(user=user).update(
+                        arbor_staff_id=arbor_id,
                     )
                     staff_name_map[full] = user
                     results["staff_created"] += 1
