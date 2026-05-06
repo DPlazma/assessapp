@@ -47,8 +47,8 @@ def setup_hub(request):
             "title": "Users",
             "icon": "bi-people",
             "desc": "Manage staff accounts and permissions.",
-            "url": None,  # placeholder until user-management page exists
-            "colour": "secondary",
+            "url": "core:users_manage",
+            "colour": "primary",
         },
         {
             "title": "AI Settings",
@@ -231,6 +231,125 @@ def subjects_manage(request):
         "rows": rows,
         "pathway_choices": PATHWAY_CHOICES,
         "phase_choices": PHASE_CHOICES,
+    })
+
+
+@slt_required
+def users_manage(request):
+    """SLT page to manage staff users: role, lead pathway, active state, Arbor link.
+
+    SLT cannot demote themselves below 'slt' (avoids accidentally locking
+    the system out of admin). Superusers are listed but their role-edit
+    fields are disabled in the UI; they are always treated as having
+    full access regardless of StaffProfile.role.
+    """
+    from django.contrib.auth import get_user_model
+    from staff.models import StaffProfile
+
+    User = get_user_model()
+    PATHWAY_LEAD_CHOICES = [
+        ("", "—"),
+        ("PREP", "Preparations"),
+        ("EXP", "Explorers"),
+        ("FUT", "Futures"),
+        ("HOR", "Horizons"),
+    ]
+
+    if request.method == "POST":
+        action = request.POST.get("action", "save")
+        valid_roles = {c for c, _ in StaffProfile.ROLE_CHOICES}
+        valid_lead_pw = {c for c, _ in PATHWAY_LEAD_CHOICES if c}
+
+        if action == "save":
+            updated = 0
+            for u in User.objects.select_related("staffprofile").all():
+                profile, _ = StaffProfile.objects.get_or_create(
+                    user=u, defaults={"role": "teacher"},
+                )
+                changed = False
+
+                # is_active toggle (do not allow toggling self off)
+                new_active = request.POST.get(f"active_{u.pk}") == "on"
+                if u.id != request.user.id and new_active != u.is_active:
+                    u.is_active = new_active
+                    u.save(update_fields=["is_active"])
+                    changed = True
+
+                # Don't let SLT change role/lead on superusers via this page
+                if u.is_superuser:
+                    if changed:
+                        updated += 1
+                    continue
+
+                new_role = request.POST.get(f"role_{u.pk}", profile.role).strip()
+                if new_role not in valid_roles:
+                    new_role = profile.role
+                # Don't let users demote themselves out of SLT
+                if u.id == request.user.id and profile.role == "slt" and new_role != "slt":
+                    new_role = "slt"
+                if new_role != profile.role:
+                    profile.role = new_role
+                    changed = True
+
+                new_lead = request.POST.get(f"lead_pathway_{u.pk}", "").strip()
+                if new_lead and new_lead not in valid_lead_pw:
+                    new_lead = ""
+                if new_role != "pathway_lead":
+                    new_lead = ""
+                if new_lead != (profile.lead_pathway or ""):
+                    profile.lead_pathway = new_lead
+                    changed = True
+
+                aid_raw = request.POST.get(f"arbor_{u.pk}", "").strip()
+                if aid_raw == "":
+                    new_aid = None
+                elif aid_raw.isdigit():
+                    new_aid = int(aid_raw)
+                else:
+                    new_aid = profile.arbor_staff_id
+                # Avoid stamping a duplicate arbor_staff_id
+                if new_aid != profile.arbor_staff_id:
+                    if new_aid is not None and StaffProfile.objects.filter(
+                        arbor_staff_id=new_aid
+                    ).exclude(pk=profile.pk).exists():
+                        messages.warning(
+                            request,
+                            f"Skipped Arbor ID {new_aid} for {u.get_full_name() or u.username} "
+                            f"— already used by another profile."
+                        )
+                    else:
+                        profile.arbor_staff_id = new_aid
+                        changed = True
+
+                if changed:
+                    profile.save()
+                    updated += 1
+
+            messages.success(request, f"Updated {updated} user(s).")
+            return redirect("core:users_manage")
+
+    users = User.objects.select_related("staffprofile").order_by(
+        "is_active", "last_name", "first_name", "username"
+    )
+    rows = []
+    for u in users:
+        profile = getattr(u, "staffprofile", None)
+        rows.append({
+            "u": u,
+            "profile": profile,
+            "role": profile.role if profile else "teacher",
+            "lead_pathway": profile.lead_pathway if profile else "",
+            "arbor_staff_id": profile.arbor_staff_id if profile else None,
+            "n_classes": u.class_assignments.count() if hasattr(u, "class_assignments") else 0,
+            "is_self": u.id == request.user.id,
+        })
+
+    return render(request, "core/users_manage.html", {
+        "rows": rows,
+        "role_choices": StaffProfile.ROLE_CHOICES,
+        "pathway_lead_choices": PATHWAY_LEAD_CHOICES,
+        "active_count": sum(1 for r in rows if r["u"].is_active),
+        "total_count": len(rows),
     })
 
 

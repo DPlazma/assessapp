@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Users — AssessApp{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'core:setup_hub' %}">Setup</a></li>
+        <li class="breadcrumb-item active">Users</li>
+    </ol>
+</nav>
+
+<div class="d-flex align-items-baseline justify-content-between mb-1">
+    <h3 class="mb-0"><i class="bi bi-people me-2"></i>Users</h3>
+    <span class="text-muted small">{{ active_count }} active / {{ total_count }} total</span>
+</div>
+<p class="text-muted">
+    Manage staff roles, pathway leadership, account status, and Arbor staff
+    ID linkage. Superusers always have full system access regardless of
+    role; their role / lead-pathway fields are read-only here.
+</p>
+
+{% if messages %}
+    {% for m in messages %}
+        <div class="alert alert-{{ m.tags|default:'info' }} py-2">{{ m }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="mb-3 d-flex gap-2">
+    <input type="text" id="user-filter" class="form-control form-control-sm" style="max-width: 24em;"
+           placeholder="Filter by name or username…">
+    <div class="form-check form-switch ms-2 align-self-center">
+        <input class="form-check-input" type="checkbox" id="show-inactive">
+        <label class="form-check-label small" for="show-inactive">Show inactive</label>
+    </div>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="save">
+    <div class="table-responsive">
+        <table class="table table-sm align-middle" id="users-table">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Username</th>
+                    <th style="width: 13em;">Role</th>
+                    <th style="width: 11em;">Lead pathway</th>
+                    <th style="width: 8em;">Arbor ID</th>
+                    <th class="text-end">Classes</th>
+                    <th class="text-center" style="width: 6em;">Active</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rows %}
+                <tr class="user-row {% if not r.u.is_active %}user-inactive d-none{% endif %}"
+                    data-search="{{ r.u.first_name|lower }} {{ r.u.last_name|lower }} {{ r.u.username|lower }}">
+                    <td>
+                        {% if r.u.is_superuser %}
+                            <span class="badge text-bg-warning me-1" title="Django superuser">
+                                <i class="bi bi-shield-lock"></i>
+                            </span>
+                        {% endif %}
+                        {% if r.is_self %}
+                            <span class="badge text-bg-info me-1" title="That's you">YOU</span>
+                        {% endif %}
+                        {{ r.u.get_full_name|default:r.u.username }}
+                        {% if not r.u.is_active %}
+                            <span class="badge text-bg-secondary ms-1">inactive</span>
+                        {% endif %}
+                    </td>
+                    <td><small class="text-muted">{{ r.u.username }}</small></td>
+                    <td>
+                        <select name="role_{{ r.u.pk }}" class="form-select form-select-sm"
+                                {% if r.u.is_superuser %}disabled{% endif %}>
+                            {% for code, label in role_choices %}
+                                <option value="{{ code }}" {% if code == r.role %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select name="lead_pathway_{{ r.u.pk }}" class="form-select form-select-sm"
+                                {% if r.u.is_superuser %}disabled{% endif %}>
+                            {% for code, label in pathway_lead_choices %}
+                                <option value="{{ code }}" {% if code == r.lead_pathway %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <input type="number" min="0" name="arbor_{{ r.u.pk }}"
+                               value="{{ r.arbor_staff_id|default_if_none:'' }}"
+                               class="form-control form-control-sm" style="width: 7em;"
+                               placeholder="—">
+                    </td>
+                    <td class="text-end">
+                        {% if r.n_classes %}
+                            <span class="badge text-bg-light">{{ r.n_classes }}</span>
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <div class="form-check form-switch d-inline-block">
+                            <input type="checkbox" class="form-check-input" name="active_{{ r.u.pk }}"
+                                   {% if r.u.is_active %}checked{% endif %}
+                                   {% if r.is_self %}disabled title="You can't deactivate yourself"{% endif %}>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save me-1"></i>Save changes
+        </button>
+        <a href="{% url 'core:setup_hub' %}" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+
+<div class="alert alert-light border mt-4 small">
+    <strong>Tips</strong>
+    <ul class="mb-0">
+        <li><strong>Role</strong> controls dashboard widgets and access to SLT-only pages
+            (Setup, Arbor, Subjects, Users, etc.). Set someone to <em>Senior Leadership Team</em>
+            to grant full SLT access.</li>
+        <li><strong>Lead pathway</strong> only applies when the role is <em>Pathway Lead</em>.</li>
+        <li><strong>Arbor ID</strong> links a local user to their Arbor staff record so SSO logins
+            can adopt the same identity (Entra <code>employeeId</code> e.g. <code>Stf_520</code> matches Arbor ID <code>520</code>).
+            Most users were filled in automatically by the Arbor sync.</li>
+        <li>Deactivated users keep all their history but can't log in or appear in pickers.</li>
+    </ul>
+</div>
+
+<script>
+(function () {
+    const filter = document.getElementById("user-filter");
+    const showInactive = document.getElementById("show-inactive");
+    const rows = document.querySelectorAll("#users-table tbody tr.user-row");
+
+    function applyFilters() {
+        const term = (filter.value || "").trim().toLowerCase();
+        const incInactive = showInactive.checked;
+        rows.forEach(r => {
+            const inactive = r.classList.contains("user-inactive");
+            const matches = !term || (r.dataset.search || "").includes(term);
+            const visible = matches && (incInactive || !inactive);
+            r.classList.toggle("d-none", !visible);
+        });
+    }
+    filter.addEventListener("input", applyFilters);
+    showInactive.addEventListener("change", applyFilters);
+})();
+</script>
+{% endblock %}
