@@ -80,17 +80,17 @@
                                                             </thead>
                                                             <tbody>
                                                             {% for student in cls.students %}
-                                                                {% student_url student item.subject as _stu_url %}
+                                                                {% student_url student item.subject as student_link %}
                                                                 <tr>
                                                                     <td>
-                                                                        <a href="{{ _stu_url }}"
+                                                                        <a href="{{ student_link }}"
                                                                            class="text-decoration-none">
                                                                             {{ student.full_name }}
                                                                         </a>
                                                                     </td>
                                                                     <td>{{ student.phase }}</td>
                                                                     <td class="text-end">
-                                                                        <a href="{{ _stu_url }}"
+                                                                        <a href="{{ student_link }}"
                                                                            class="btn btn-sm btn-outline-primary">
                                                                             <i class="bi bi-pencil-square me-1"></i>Assess
                                                                         </a>
