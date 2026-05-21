@@ -1,66 +1,70 @@
-{# ── Shared student navigation bar ── #}
-{# Include with: {% include "students/_student_nav.html" with student_nav="assess" %} #}
-<nav aria-label="breadcrumb" class="mb-2">
-    <ol class="breadcrumb mb-0">
-        <li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}">My Class</a></li>
-        <li class="breadcrumb-item active">{{ student.full_name }}</li>
-    </ol>
-</nav>
-
-<div class="d-flex align-items-center mb-3 flex-wrap gap-2">
-    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-2 flex-shrink-0"
-         style="width:44px; height:44px; font-size:1rem; font-weight:600;">
-        {{ student.first_name.0 }}{{ student.last_name.0 }}
+{# ── Shared student profile header + tabs ──
+   Include with: {% include "students/_student_nav.html" with active_tab="overview" %}
+   active_tab values: overview | subjects | progress | journey | ehcp | evidence
+#}
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body py-3">
+        <div class="d-flex align-items-center flex-wrap gap-3">
+            <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center flex-shrink-0"
+                 style="width:56px; height:56px; font-size:1.25rem; font-weight:600;">
+                {{ student.first_name.0 }}{{ student.last_name.0 }}
+            </div>
+            <div class="me-auto">
+                <h4 class="mb-0">{{ student.full_name }}</h4>
+                <div class="text-muted small">
+                    {% if student.class_group %}
+                        <i class="bi bi-people me-1"></i>{{ student.class_group.name }}
+                        {% if student.class_group.pathway_label %}<span class="mx-1">·</span>{{ student.class_group.pathway_label }}{% endif %}
+                    {% else %}
+                        <span class="text-warning"><i class="bi bi-exclamation-triangle me-1"></i>Unassigned</span>
+                    {% endif %}
+                    {% if student.year_group %}<span class="mx-1">·</span>Year {{ student.year_group }}{% endif %}
+                    {% if student.upn %}<span class="mx-1">·</span>UPN {{ student.upn }}{% endif %}
+                </div>
+            </div>
+            <div class="d-flex gap-1 align-items-center flex-wrap">
+                <a href="{% url 'evidence:quick_evidence_upload' %}" class="btn btn-warning btn-sm">
+                    <i class="bi bi-camera-video me-1"></i>Record
+                </a>
+            </div>
+        </div>
     </div>
-    <div class="me-auto">
-        <h5 class="mb-0">{{ student.full_name }}</h5>
-        <small class="text-muted">
-            {% if student.class_group %}
-                {{ student.class_group.name }}
-                {% if student.class_group.pathway_label %}&middot; {{ student.class_group.pathway_label }}{% endif %}
-            {% else %}
-                <span class="text-warning">Unassigned</span>
-            {% endif %}
-            {% if student.year_group %}&middot; Year {{ student.year_group }}{% endif %}
-        </small>
-    </div>
+    <ul class="nav nav-tabs px-3 border-bottom-0" style="margin-bottom:-1px;">
+        <li class="nav-item">
+            <a class="nav-link py-2{% if active_tab == 'overview' %} active{% endif %}"
+               href="{% url 'students:detail' student.pk %}">
+                <i class="bi bi-grid-1x2 me-1"></i>Overview
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link py-2{% if active_tab == 'subjects' %} active{% endif %}"
+               href="{% url 'assessments:student_subjects' student.pk %}">
+                <i class="bi bi-pencil-square me-1"></i>Subjects
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link py-2{% if active_tab == 'progress' %} active{% endif %}"
+               href="{% url 'students:progress' student.pk %}">
+                <i class="bi bi-graph-up me-1"></i>Progress
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link py-2{% if active_tab == 'journey' %} active{% endif %}"
+               href="{% url 'students:learning_journey' student.pk %}">
+                <i class="bi bi-journal-richtext me-1"></i>Journey
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link py-2{% if active_tab == 'ehcp' %} active{% endif %}"
+               href="{% url 'evidence:ehcp_overview' student.pk %}">
+                <i class="bi bi-bullseye me-1"></i>EHCP
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link py-2{% if active_tab == 'evidence' %} active{% endif %}"
+               href="{% url 'evidence:evidence_gallery' student.pk %}">
+                <i class="bi bi-images me-1"></i>Evidence
+            </a>
+        </li>
+    </ul>
 </div>
-
-<ul class="nav nav-pills mb-3 gap-1 flex-wrap">
-    <li class="nav-item">
-        <a class="nav-link py-1 px-2{% if student_nav == 'assess' %} active{% endif %}"
-           href="{% url 'assessments:student_subjects' student.pk %}">
-            <i class="bi bi-pencil-square me-1"></i>Assess
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link py-1 px-2{% if student_nav == 'journey' %} active{% endif %}"
-           href="{% url 'students:learning_journey' student.pk %}">
-            <i class="bi bi-journal-richtext me-1"></i>Journey
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link py-1 px-2{% if student_nav == 'progress' %} active{% endif %}"
-           href="{% url 'students:progress' student.pk %}">
-            <i class="bi bi-graph-up me-1"></i>Progress
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link py-1 px-2{% if student_nav == 'ehcp' %} active{% endif %}"
-           href="{% url 'evidence:ehcp_overview' student.pk %}">
-            <i class="bi bi-bullseye me-1"></i>EHCP
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link py-1 px-2{% if student_nav == 'evidence' %} active{% endif %}"
-           href="{% url 'evidence:evidence_gallery' student.pk %}">
-            <i class="bi bi-images me-1"></i>Evidence
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link py-1 px-2{% if student_nav == 'interventions' %} active{% endif %}"
-           href="{% url 'evidence:intervention_list' student.pk %}">
-            <i class="bi bi-clipboard2-pulse me-1"></i>Interventions
-        </a>
-    </li>
-</ul>

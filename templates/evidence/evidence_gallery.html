@@ -3,6 +3,7 @@
 {% block title %}Evidence — {{ student.full_name }}{% endblock %}
 
 {% block content %}
+{% include "students/_student_nav.html" with active_tab="evidence" %}
 {% include "students/_student_nav.html" with student_nav="evidence" %}
 
 <div class="d-flex align-items-center justify-content-between mb-3">

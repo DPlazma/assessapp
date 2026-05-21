@@ -3,6 +3,7 @@
 {% block title %}Learning Journey — {{ student.full_name }} — AssessApp{% endblock %}
 
 {% block content %}
+{% include "students/_student_nav.html" with active_tab="journey" %}
 {% include "students/_student_nav.html" with student_nav="journey" %}
 
 <!-- ═══════════════════ DEMOGRAPHICS CARD ═══════════════════ -->

@@ -3,6 +3,7 @@
 {% block title %}EHCP Targets — {{ student.full_name }}{% endblock %}
 
 {% block content %}
+{% include "students/_student_nav.html" with active_tab="ehcp" %}
 {% include "students/_student_nav.html" with student_nav="ehcp" %}
 
 <div class="d-flex align-items-center justify-content-between mb-3">

@@ -3,7 +3,7 @@
 {% block title %}{{ student.full_name }} — AssessApp{% endblock %}
 
 {% block content %}
-{% include "students/_student_nav.html" with student_nav="assess" %}
+{% include "students/_student_nav.html" with active_tab="subjects" %}
 
 <div class="row g-4">
     {# ── Left Column: Frameworks + Subjects ── #}

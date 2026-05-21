@@ -3,6 +3,7 @@
 {% block title %}Progress — {{ student.full_name }} — AssessApp{% endblock %}
 
 {% block content %}
+{% include "students/_student_nav.html" with active_tab="progress" %}
 <style>
     .progress-timeline { position: relative; padding-left: 2rem; }
     .progress-timeline::before {
