@@ -18,7 +18,8 @@
 
 <div class="accordion" id="mysubs-accordion">
 {% for item in subject_data %}
-    {% with subj_id="subj-"|add:item.subject.pk|stringformat:"s" %}
+    {% with subj_pk=item.subject.pk|stringformat:"s" %}
+    {% with subj_id="subj-"|add:subj_pk %}
     <div class="accordion-item mb-2 shadow-sm">
         <h2 class="accordion-header">
             <button class="accordion-button collapsed" type="button"
@@ -35,7 +36,8 @@
                 {% if item.pathway_groups %}
                     <div class="accordion" id="{{ subj_id }}-pw">
                     {% for pw in item.pathway_groups %}
-                        {% with pw_id=subj_id|add:"-pw-"|add:forloop.counter|stringformat:"s" %}
+                        {% with pw_counter=forloop.counter|stringformat:"s" %}
+                        {% with pw_id=subj_id|add:"-pw-"|add:pw_counter %}
                         <div class="accordion-item">
                             <h2 class="accordion-header">
                                 <button class="accordion-button collapsed bg-light" type="button"
@@ -51,7 +53,8 @@
                                 <div class="accordion-body p-2">
                                     <div class="accordion" id="{{ pw_id }}-cls">
                                     {% for cls in pw.classes %}
-                                        {% with cls_id=pw_id|add:"-cls-"|add:forloop.counter|stringformat:"s" %}
+                                        {% with cls_counter=forloop.counter|stringformat:"s" %}
+                                        {% with cls_id=pw_id|add:"-cls-"|add:cls_counter %}
                                         <div class="accordion-item">
                                             <h2 class="accordion-header">
                                                 <button class="accordion-button collapsed" type="button"
@@ -99,11 +102,13 @@
                                             </div>
                                         </div>
                                         {% endwith %}
+                                        {% endwith %}
                                     {% endfor %}
                                     </div>
                                 </div>
                             </div>
                         </div>
+                        {% endwith %}
                         {% endwith %}
                     {% endfor %}
                     </div>
@@ -115,6 +120,7 @@
             </div>
         </div>
     </div>
+    {% endwith %}
     {% endwith %}
 {% empty %}
     <div class="text-center py-5 text-muted">
