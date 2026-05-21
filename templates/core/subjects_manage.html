@@ -35,6 +35,7 @@
                     <th style="width: 7em;">Short</th>
                     <th>Pathways</th>
                     <th>Phases</th>
+                    <th>Leads</th>
                     <th class="text-center">Active</th>
                     <th class="text-end">Usage</th>
                     <th></th>
@@ -75,6 +76,22 @@
                             </div>
                         {% endfor %}
                     </td>
+                    <td style="min-width: 14em;">
+                        <select class="form-select form-select-sm" name="leads_{{ r.s.pk }}"
+                                multiple size="3" style="min-width: 14em;">
+                            {% for u in lead_candidates %}
+                                <option value="{{ u.pk }}"
+                                    {% if u.id in r.current_lead_ids %}selected{% endif %}>
+                                    {{ u.get_full_name|default:u.username }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        {% if not lead_candidates %}
+                            <small class="text-muted">No subject leads yet. Set a user's role to <em>Subject Lead</em> on the <a href="{% url 'core:users_manage' %}">Users</a> page first.</small>
+                        {% else %}
+                            <small class="text-muted">Hold Ctrl/Cmd to pick multiple.</small>
+                        {% endif %}
+                    </td>
                     <td class="text-center">
                         <div class="form-check form-switch d-inline-block">
                             <input class="form-check-input" type="checkbox" name="active_{{ r.s.pk }}"
@@ -101,7 +118,7 @@
                     </td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="8" class="text-muted">No subjects yet.</td></tr>
+                <tr><td colspan="9" class="text-muted">No subjects yet.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

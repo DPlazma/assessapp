@@ -129,8 +129,26 @@ def subjects_manage(request):
 
     Also supports adding / deleting subjects (with safety checks).
     """
+    from django.contrib.auth import get_user_model
+    from django.db.models import Q
     from students.models import Subject, PATHWAY_CHOICES, PHASE_CHOICES
     from assessments.models import AssessmentArea, AssessmentRecord
+    from staff.models import SubjectLead
+
+    User = get_user_model()
+
+    # Candidates for "Subject Lead" assignment: active users whose
+    # StaffProfile.role is subject_lead (or SLT, who often also lead a
+    # subject). Superusers are included for completeness.
+    lead_candidates = list(
+        User.objects.filter(is_active=True)
+        .filter(
+            Q(staffprofile__role__in=["subject_lead", "slt"])
+            | Q(is_superuser=True)
+        )
+        .distinct()
+        .order_by("last_name", "first_name", "username")
+    )
 
     if request.method == "POST":
         action = request.POST.get("action", "save")
@@ -213,24 +231,55 @@ def subjects_manage(request):
                 s.save()
                 updated += 1
 
+            # Sync subject leads for this subject. Posted IDs that aren't in
+            # lead_candidates are ignored (defence against tampering).
+            valid_lead_ids = {u.id for u in lead_candidates}
+            posted_lead_ids = set()
+            for raw in request.POST.getlist(f"leads_{s.pk}"):
+                if raw.isdigit():
+                    uid = int(raw)
+                    if uid in valid_lead_ids:
+                        posted_lead_ids.add(uid)
+            current_lead_ids = set(
+                SubjectLead.objects.filter(subject=s).values_list("user_id", flat=True)
+            )
+            to_add = posted_lead_ids - current_lead_ids
+            to_remove = current_lead_ids - posted_lead_ids
+            if to_add:
+                SubjectLead.objects.bulk_create(
+                    [SubjectLead(user_id=uid, subject=s) for uid in to_add],
+                    ignore_conflicts=True,
+                )
+            if to_remove:
+                SubjectLead.objects.filter(subject=s, user_id__in=to_remove).delete()
+
         messages.success(request, f"Updated {updated} subject(s).")
         return redirect("core:subjects_manage")
 
     rows = []
+    leads_by_subject = {}
+    for sl in SubjectLead.objects.select_related("user").all():
+        leads_by_subject.setdefault(sl.subject_id, []).append(sl.user)
+
     for s in Subject.objects.all().order_by("order", "name"):
         n_areas = AssessmentArea.objects.filter(subject=s).count()
         n_records = AssessmentRecord.objects.filter(statement__area__subject=s).count()
+        current_leads = leads_by_subject.get(s.pk, [])
+        current_lead_ids = {u.id for u in current_leads}
         rows.append({
             "s": s,
             "n_areas": n_areas,
             "n_records": n_records,
             "deletable": (n_areas == 0 and n_records == 0),
+            "current_leads": current_leads,
+            "current_lead_ids": current_lead_ids,
         })
 
     return render(request, "core/subjects_manage.html", {
         "rows": rows,
         "pathway_choices": PATHWAY_CHOICES,
         "phase_choices": PHASE_CHOICES,
+        "lead_candidates": lead_candidates,
     })
 
 
