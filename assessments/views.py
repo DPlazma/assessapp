@@ -65,23 +65,71 @@ def _can_assess_student(user, student, subject=None):
 
 @login_required
 def my_subjects(request):
-    """Subject lead landing page — shows their subjects and all students."""
+    """Subject lead landing page — shows their subjects grouped by pathway and class."""
     profile = getattr(request.user, "staffprofile", None)
     if not profile or not profile.is_subject_lead:
         return redirect("core:dashboard")
 
+    from students.models import PATHWAY_CHOICES
+
+    pathway_label = dict(PATHWAY_CHOICES)
+
     lead_subjects = Subject.objects.filter(
         leads__user=request.user, is_active=True
-    )
+    ).order_by("order", "name")
 
     subject_data = []
     for subj in lead_subjects:
-        students = Student.objects.filter(
-            is_active=True,
-            pathway__in=subj.applicable_pathways,
-            phase__in=subj.applicable_phases,
-        ).order_by("class_group__name", "last_name", "first_name")
-        subject_data.append({"subject": subj, "students": students})
+        students = list(
+            Student.objects.filter(
+                is_active=True,
+                pathway__in=subj.applicable_pathways,
+                phase__in=subj.applicable_phases,
+            )
+            .select_related("class_group")
+            .order_by("pathway", "class_group__name", "last_name", "first_name")
+        )
+
+        # Group: pathway → class → [students]
+        pathway_groups = []
+        pathway_buckets = {}
+        for s in students:
+            pw_code = s.pathway or ""
+            pw_bucket = pathway_buckets.get(pw_code)
+            if pw_bucket is None:
+                pw_bucket = {
+                    "code": pw_code,
+                    "label": pathway_label.get(pw_code, pw_code or "Unassigned"),
+                    "classes": [],
+                    "_class_index": {},
+                    "count": 0,
+                }
+                pathway_buckets[pw_code] = pw_bucket
+                pathway_groups.append(pw_bucket)
+
+            cg = s.class_group
+            cg_key = cg.pk if cg else None
+            cls_bucket = pw_bucket["_class_index"].get(cg_key)
+            if cls_bucket is None:
+                cls_bucket = {
+                    "class_group": cg,
+                    "name": cg.name if cg else "No class",
+                    "students": [],
+                }
+                pw_bucket["_class_index"][cg_key] = cls_bucket
+                pw_bucket["classes"].append(cls_bucket)
+            cls_bucket["students"].append(s)
+            pw_bucket["count"] += 1
+
+        # Strip the internal index before sending to the template
+        for pw in pathway_groups:
+            pw.pop("_class_index", None)
+
+        subject_data.append({
+            "subject": subj,
+            "total": len(students),
+            "pathway_groups": pathway_groups,
+        })
 
     context = {"subject_data": subject_data}
     return render(request, "assessments/my_subjects.html", context)

@@ -2,57 +2,148 @@
 {% block title %}My Subjects — AssessApp{% endblock %}
 
 {% block content %}
-<h4 class="mb-4"><i class="bi bi-book me-2"></i>My Subjects</h4>
+<div class="d-flex align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-book me-2"></i>My Subjects</h4>
+    {% if subject_data %}
+    <div class="ms-auto btn-group btn-group-sm" role="group">
+        <button type="button" class="btn btn-outline-secondary" id="mysubs-expand-all">
+            <i class="bi bi-arrows-expand me-1"></i>Expand all
+        </button>
+        <button type="button" class="btn btn-outline-secondary" id="mysubs-collapse-all">
+            <i class="bi bi-arrows-collapse me-1"></i>Collapse all
+        </button>
+    </div>
+    {% endif %}
+</div>
 
+<div class="accordion" id="mysubs-accordion">
 {% for item in subject_data %}
-<div class="card mb-4 shadow-sm">
-    <div class="card-header bg-primary text-white d-flex align-items-center">
-        <h5 class="mb-0"><i class="bi bi-book me-2"></i>{{ item.subject.name }}</h5>
-        <span class="badge bg-light text-primary ms-auto">{{ item.students|length }} students</span>
-    </div>
-    <div class="card-body p-0">
-        {% if item.students %}
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Student</th>
-                        <th>Class</th>
-                        <th>Pathway</th>
-                        <th>Phase</th>
-                        <th class="text-end">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for student in item.students %}
-                    <tr>
-                        <td>
-                            <a href="{% url 'assessments:assess_student' student.pk item.subject.pk %}" class="text-decoration-none">
-                                {{ student.full_name }}
-                            </a>
-                        </td>
-                        <td>{{ student.class_group.name|default:"—" }}</td>
-                        <td>{{ student.get_pathway_display }}</td>
-                        <td>{{ student.phase }}</td>
-                        <td class="text-end">
-                            <a href="{% url 'assessments:assess_student' student.pk item.subject.pk %}" class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-pencil-square me-1"></i>Assess
-                            </a>
-                        </td>
-                    </tr>
+    {% with subj_id="subj-"|add:item.subject.pk|stringformat:"s" %}
+    <div class="accordion-item mb-2 shadow-sm">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#{{ subj_id }}"
+                    aria-expanded="false" aria-controls="{{ subj_id }}">
+                <i class="bi bi-book me-2"></i>
+                <strong>{{ item.subject.name }}</strong>
+                <span class="badge bg-primary ms-2">{{ item.total }} student{{ item.total|pluralize }}</span>
+            </button>
+        </h2>
+        <div id="{{ subj_id }}" class="accordion-collapse collapse"
+             data-bs-parent="#mysubs-accordion">
+            <div class="accordion-body p-2">
+                {% if item.pathway_groups %}
+                    <div class="accordion" id="{{ subj_id }}-pw">
+                    {% for pw in item.pathway_groups %}
+                        {% with pw_id=subj_id|add:"-pw-"|add:forloop.counter|stringformat:"s" %}
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed bg-light" type="button"
+                                        data-bs-toggle="collapse" data-bs-target="#{{ pw_id }}"
+                                        aria-expanded="false" aria-controls="{{ pw_id }}">
+                                    <i class="bi bi-diagram-3 me-2"></i>
+                                    {{ pw.label }}
+                                    <span class="badge bg-secondary ms-2">{{ pw.count }}</span>
+                                </button>
+                            </h2>
+                            <div id="{{ pw_id }}" class="accordion-collapse collapse"
+                                 data-bs-parent="#{{ subj_id }}-pw">
+                                <div class="accordion-body p-2">
+                                    <div class="accordion" id="{{ pw_id }}-cls">
+                                    {% for cls in pw.classes %}
+                                        {% with cls_id=pw_id|add:"-cls-"|add:forloop.counter|stringformat:"s" %}
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button"
+                                                        data-bs-toggle="collapse" data-bs-target="#{{ cls_id }}"
+                                                        aria-expanded="false" aria-controls="{{ cls_id }}">
+                                                    <i class="bi bi-people me-2"></i>
+                                                    {{ cls.name }}
+                                                    <span class="badge bg-light text-dark border ms-2">{{ cls.students|length }}</span>
+                                                </button>
+                                            </h2>
+                                            <div id="{{ cls_id }}" class="accordion-collapse collapse"
+                                                 data-bs-parent="#{{ pw_id }}-cls">
+                                                <div class="accordion-body p-0">
+                                                    <div class="table-responsive">
+                                                        <table class="table table-hover table-sm mb-0">
+                                                            <thead class="table-light">
+                                                                <tr>
+                                                                    <th>Student</th>
+                                                                    <th>Phase</th>
+                                                                    <th class="text-end">Action</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                            {% for student in cls.students %}
+                                                                <tr>
+                                                                    <td>
+                                                                        <a href="{% url 'assessments:assess_student' student.pk item.subject.pk %}"
+                                                                           class="text-decoration-none">
+                                                                            {{ student.full_name }}
+                                                                        </a>
+                                                                    </td>
+                                                                    <td>{{ student.phase }}</td>
+                                                                    <td class="text-end">
+                                                                        <a href="{% url 'assessments:assess_student' student.pk item.subject.pk %}"
+                                                                           class="btn btn-sm btn-outline-primary">
+                                                                            <i class="bi bi-pencil-square me-1"></i>Assess
+                                                                        </a>
+                                                                    </td>
+                                                                </tr>
+                                                            {% endfor %}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endwith %}
+                                    {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endwith %}
                     {% endfor %}
-                </tbody>
-            </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted text-center py-3 mb-0">
+                        No students for this subject's pathway/phase combination.
+                    </p>
+                {% endif %}
+            </div>
         </div>
-        {% else %}
-        <p class="text-muted text-center py-3 mb-0">No students for this subject's pathway/phase combination.</p>
-        {% endif %}
     </div>
-</div>
+    {% endwith %}
 {% empty %}
-<div class="text-center py-5 text-muted">
-    <i class="bi bi-book" style="font-size:2rem;"></i>
-    <p class="mt-2">You haven't been assigned any subjects yet. Ask your SLT to set this up.</p>
-</div>
+    <div class="text-center py-5 text-muted">
+        <i class="bi bi-book" style="font-size:2rem;"></i>
+        <p class="mt-2">You haven't been assigned any subjects yet. Ask your SLT to set this up.</p>
+    </div>
 {% endfor %}
+</div>
+
+<script>
+(function () {
+    var root = document.getElementById('mysubs-accordion');
+    if (!root) return;
+    var expandBtn = document.getElementById('mysubs-expand-all');
+    var collapseBtn = document.getElementById('mysubs-collapse-all');
+    if (expandBtn) {
+        expandBtn.addEventListener('click', function () {
+            root.querySelectorAll('.accordion-collapse').forEach(function (el) {
+                bootstrap.Collapse.getOrCreateInstance(el, { toggle: false }).show();
+            });
+        });
+    }
+    if (collapseBtn) {
+        collapseBtn.addEventListener('click', function () {
+            root.querySelectorAll('.accordion-collapse').forEach(function (el) {
+                bootstrap.Collapse.getOrCreateInstance(el, { toggle: false }).hide();
+            });
+        });
+    }
+})();
+</script>
 {% endblock %}
