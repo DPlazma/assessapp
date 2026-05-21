@@ -395,6 +395,7 @@ def _fetch_my_subjects(request, ctx):
 
         t = total_records or 1
         subjects_data.append({
+            "id": subj_id,
             "name": subj_name,
             "area_count": area_count,
             "counts": counts,
@@ -406,7 +407,14 @@ def _fetch_my_subjects(request, ctx):
 
 
 def _fetch_attention(request, ctx):
-    """Role-specific attention items: EHCP reviews, assessment gaps, covers."""
+    """Role-specific attention items with clickable links and contextual numbers.
+
+    Each item shape:
+        {icon, colour, text, detail, pct, link}
+    `detail` is a short denominator/context string (e.g. "of 24 in class").
+    `pct` is an integer 0-100 used to render a small progress bar.
+    """
+    from django.urls import reverse
     from evidence.models import EHCPTarget
     from staff.models import ClassCover
 
@@ -417,23 +425,38 @@ def _fetch_attention(request, ctx):
 
     students = ctx.get("students", [])
     student_ids = [s.pk for s in students] if students else []
+    active_class = ctx.get("active_class")
 
-    # EHCP reviews due within 14 days (all roles that have students)
+    # ── EHCP reviews due within 14 days ───────────────────────────
     if student_ids:
-        overdue = EHCPTarget.objects.filter(
+        active_targets_qs = EHCPTarget.objects.filter(
             student_id__in=student_ids,
+        ).exclude(status__in=["MET", "EXCEEDED"])
+        total_ehcp = active_targets_qs.count()
+        due_qs = active_targets_qs.filter(
             review_date__lte=today + timezone.timedelta(days=14),
             review_date__gte=today - timezone.timedelta(days=30),
-        ).exclude(status__in=["MET", "EXCEEDED"]).count()
+        )
+        overdue = due_qs.count()
         if overdue:
+            sample = due_qs.select_related("student").order_by("review_date").first()
+            link = (
+                reverse("evidence:ehcp_overview", args=[sample.student_id])
+                if sample else "#"
+            )
             items.append({
                 "icon": "bi-exclamation-triangle-fill",
                 "colour": "warning",
                 "text": f"{overdue} EHCP review{'s' if overdue != 1 else ''} due soon",
-                "link": "#",
+                "detail": (
+                    f"of {total_ehcp} active target{'s' if total_ehcp != 1 else ''}"
+                    if total_ehcp else None
+                ),
+                "pct": round(overdue / total_ehcp * 100) if total_ehcp else None,
+                "link": link,
             })
 
-    # Students with zero assessments this term
+    # ── Students with zero assessments this term ──────────────────
     if student_ids:
         from assessments.models import AssessmentRecord
         from core.models import Term
@@ -446,16 +469,23 @@ def _fetch_attention(request, ctx):
                     assessed_date__lte=term.end_date,
                 ).values_list("student_id", flat=True)
             )
-            unassessed = len(student_ids) - len(assessed_ids & set(student_ids))
+            total = len(student_ids)
+            unassessed = total - len(assessed_ids & set(student_ids))
             if unassessed:
+                link = (
+                    reverse("assessments:class_progress", args=[active_class.pk])
+                    if active_class else "#"
+                )
                 items.append({
                     "icon": "bi-person-exclamation",
                     "colour": "danger",
-                    "text": f"{unassessed} student{'s' if unassessed != 1 else ''} with no assessments this term",
-                    "link": "#",
+                    "text": f"{unassessed} student{'s' if unassessed != 1 else ''} not yet assessed this term",
+                    "detail": f"of {total} in class",
+                    "pct": round(unassessed / total * 100) if total else None,
+                    "link": link,
                 })
 
-    # Currently covering a class (teacher/TA)
+    # ── Currently covering a class (teacher/TA) ───────────────────
     if role_group == "teacher":
         covers_today = ClassCover.objects.filter(
             user=user, start_date__lte=today, end_date__gte=today,
@@ -465,10 +495,12 @@ def _fetch_attention(request, ctx):
                 "icon": "bi-arrow-left-right",
                 "colour": "info",
                 "text": f"Covering {cover.class_group.name} today",
-                "link": "#",
+                "detail": None,
+                "pct": None,
+                "link": reverse("staff:cover_class"),
             })
 
-    # SLT: total unassessed students across school
+    # ── SLT: school-wide unassessed students ──────────────────────
     if role_group == "slt":
         from students.models import Student
         from assessments.models import AssessmentRecord
@@ -490,8 +522,10 @@ def _fetch_attention(request, ctx):
                 items.append({
                     "icon": "bi-people-fill",
                     "colour": "warning",
-                    "text": f"{gap} student{'s' if gap != 1 else ''} school-wide with no assessments this term",
-                    "link": "#",
+                    "text": f"{gap} student{'s' if gap != 1 else ''} not assessed this term",
+                    "detail": f"of {all_active} school-wide",
+                    "pct": round(gap / all_active * 100) if all_active else None,
+                    "link": reverse("assessments:school_progress"),
                 })
 
     return {"attention_items": items}

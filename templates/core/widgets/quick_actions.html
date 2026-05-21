@@ -1,19 +1,44 @@
 <!-- Quick Actions — role-aware shortcuts -->
 <div class="d-grid gap-2">
+    {# Everyone: capture evidence #}
     <a href="{% url 'evidence:quick_evidence_upload' %}" class="btn btn-outline-primary btn-sm text-start">
         <i class="bi bi-camera-video me-2"></i>Record Evidence
     </a>
+
+    {# Teachers, TAs, HLTAs only: cover a class #}
+    {% if not is_slt and not is_lead %}
     <a href="{% url 'staff:cover_class' %}" class="btn btn-outline-secondary btn-sm text-start">
         <i class="bi bi-arrow-left-right me-2"></i>Cover a Class
     </a>
+    {% endif %}
+
+    {# Everyone: view reports #}
     <a href="{% url 'reports:index' %}" class="btn btn-outline-secondary btn-sm text-start">
         <i class="bi bi-bar-chart-line me-2"></i>View Reports
     </a>
-    {% if is_slt or is_subject_lead %}
+
+    {# Subject leads only: jump to their cross-class subject view #}
+    {% if is_subject_lead %}
+    <a href="{% url 'assessments:my_subjects' %}" class="btn btn-outline-secondary btn-sm text-start">
+        <i class="bi bi-book me-2"></i>My Subjects
+    </a>
+    {% endif %}
+
+    {# Leads + SLT: whole-school progress #}
+    {% if is_slt or is_subject_lead or is_pathway_lead %}
     <a href="{% url 'assessments:school_progress' %}" class="btn btn-outline-secondary btn-sm text-start">
         <i class="bi bi-building me-2"></i>School Progress
     </a>
     {% endif %}
+
+    {# Subject leads + SLT: manage frameworks/statements #}
+    {% if is_slt or is_subject_lead %}
+    <a href="{% url 'assessments:manage_statements' %}" class="btn btn-outline-secondary btn-sm text-start">
+        <i class="bi bi-diagram-3 me-2"></i>Manage Frameworks
+    </a>
+    {% endif %}
+
+    {# SLT only: setup hub #}
     {% if is_slt %}
     <a href="{% url 'core:setup_hub' %}" class="btn btn-outline-secondary btn-sm text-start">
         <i class="bi bi-gear me-2"></i>Setup

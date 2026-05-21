@@ -5,6 +5,7 @@ app_name = "core"
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
+    path("search/", views.search_global, name="search"),
     path("dashboard/save-layout/", views.save_widget_layout, name="save_widget_layout"),
     path("dashboard/toggle-widget/", views.toggle_widget, name="toggle_widget"),
     path("dashboard/resize-widget/", views.resize_widget, name="resize_widget"),

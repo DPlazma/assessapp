@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block breadcrumb %}<nav aria-label="breadcrumb" class="container-fluid pt-2"><ol class="breadcrumb mb-0 small"><li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}"><i class="bi bi-house-door"></i></a></li><li class="breadcrumb-item"><a href="{% url 'reports:index' %}">Reports</a></li><li class="breadcrumb-item active">Cohort Report</li></ol></nav>{% endblock %}
 {% load assess_tags %}
 {% load student_tags %}
 {% block title %}Cohort Report — AssessApp{% endblock %}

@@ -1,0 +1,16 @@
+{# Usage: {% include "_breadcrumb.html" with crumbs=crumbs %}
+   crumbs = list of dicts: {label, url}. Last item should have empty url. #}
+{% if crumbs %}
+<nav aria-label="breadcrumb" class="container-fluid pt-2">
+    <ol class="breadcrumb mb-0 small">
+        <li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}"><i class="bi bi-house-door"></i></a></li>
+        {% for c in crumbs %}
+            {% if forloop.last or not c.url %}
+                <li class="breadcrumb-item active" aria-current="page">{{ c.label }}</li>
+            {% else %}
+                <li class="breadcrumb-item"><a href="{{ c.url }}">{{ c.label }}</a></li>
+            {% endif %}
+        {% endfor %}
+    </ol>
+</nav>
+{% endif %}

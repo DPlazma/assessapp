@@ -1696,3 +1696,62 @@ def arbor_import_run(request):
         "msg": summary,
         "results": results,
     })
+
+
+# ── Global search ──────────────────────────────────────────────────
+
+@login_required
+def search_global(request):
+    """HTMX-driven global search across students and classes.
+
+    Scoped by role:
+      - SLT / Subject Lead: all active students + all classes
+      - Pathway Lead: students/classes in their pathway
+      - Otherwise: only students in classes the user teaches or is covering
+    """
+    from django.db.models import Q
+    from django.utils import timezone as _tz
+    from students.models import Student
+
+    q = (request.GET.get("q") or "").strip()
+    students = []
+    classes = []
+
+    if len(q) >= 2:
+        user = request.user
+        profile = getattr(user, "staffprofile", None)
+        role = getattr(profile, "role", None) if profile else None
+        pathway = getattr(profile, "lead_pathway", None) if profile else None
+
+        student_qs = Student.objects.filter(is_active=True).select_related("class_group")
+        class_qs = ClassGroup.objects.all()
+
+        if user.is_superuser or role in ("slt", "subject_lead"):
+            pass  # full scope
+        elif role == "pathway_lead" and pathway:
+            student_qs = student_qs.filter(class_group__pathway=pathway)
+            class_qs = class_qs.filter(pathway=pathway)
+        else:
+            today = _tz.now().date()
+            taught = ClassAssignment.objects.filter(user=user).values_list("class_group_id", flat=True)
+            covered = ClassCover.objects.filter(
+                user=user, start_date__lte=today, end_date__gte=today,
+            ).values_list("class_group_id", flat=True)
+            allowed_ids = set(taught) | set(covered)
+            student_qs = student_qs.filter(class_group_id__in=allowed_ids)
+            class_qs = class_qs.filter(id__in=allowed_ids)
+
+        students = list(
+            student_qs.filter(
+                Q(first_name__icontains=q)
+                | Q(last_name__icontains=q)
+                | Q(upn__icontains=q)
+            ).order_by("last_name", "first_name")[:8]
+        )
+        classes = list(class_qs.filter(name__icontains=q).order_by("name")[:5])
+
+    return render(
+        request,
+        "core/_search_results.html",
+        {"q": q, "students": students, "classes": classes},
+    )

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block breadcrumb %}<nav aria-label="breadcrumb" class="container-fluid pt-2"><ol class="breadcrumb mb-0 small"><li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}"><i class="bi bi-house-door"></i></a></li><li class="breadcrumb-item"><a href="{% url 'core:setup_hub' %}">Setup</a></li><li class="breadcrumb-item active">Classes &amp; Pathways</li></ol></nav>{% endblock %}
 {% block title %}Classes &amp; Pathways — AssessApp{% endblock %}
 
 {% block content %}

@@ -1,0 +1,26 @@
+{% load student_tags %}
+{% if not q %}
+<div class="text-muted small px-3 py-2">Type 2+ characters to search…</div>
+{% elif not students and not classes %}
+<div class="text-muted small px-3 py-2">No matches for "{{ q }}".</div>
+{% else %}
+{% if students %}
+<h6 class="dropdown-header"><i class="bi bi-person me-1"></i>Students</h6>
+{% for s in students %}
+{% student_url s as s_url %}
+<a class="dropdown-item d-flex justify-content-between align-items-center" href="{{ s_url }}">
+    <span><i class="bi bi-person-circle text-secondary me-2"></i>{{ s.full_name }}</span>
+    {% if s.class_group %}<small class="text-muted">{{ s.class_group.name }}</small>{% endif %}
+</a>
+{% endfor %}
+{% endif %}
+{% if classes %}
+{% if students %}<div class="dropdown-divider"></div>{% endif %}
+<h6 class="dropdown-header"><i class="bi bi-people me-1"></i>Classes</h6>
+{% for c in classes %}
+<a class="dropdown-item" href="{% url 'assessments:class_progress' c.pk %}">
+    <i class="bi bi-people-fill text-secondary me-2"></i>{{ c.name }}
+</a>
+{% endfor %}
+{% endif %}
+{% endif %}

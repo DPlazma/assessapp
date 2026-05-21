@@ -3,10 +3,12 @@
 {% if subjects %}
 <style>
     .subj-mini-bar { height: 6px; border-radius: 3px; overflow: hidden; }
+    .subj-row { display: block; padding: 0.25rem; border-radius: 6px; text-decoration: none; color: inherit; }
+    .subj-row:hover { background: #f5f5f5; color: inherit; }
 </style>
 
 {% for subj in subjects %}
-<div class="mb-3">
+<a class="subj-row mb-2" href="{% url 'assessments:school_progress' %}?subject={{ subj.id }}">
     <div class="d-flex justify-content-between align-items-center mb-1">
         <span class="fw-semibold small">{{ subj.name }}</span>
         <span class="text-muted" style="font-size: 0.7rem;">{{ subj.area_count }} area{{ subj.area_count|pluralize }}</span>
@@ -32,7 +34,7 @@
         <span><span class="badge bg-success py-0">S</span> {{ subj.counts.SEC }}</span>
         <span class="ms-auto text-muted">{{ subj.total }} total</span>
     </div>
-</div>
+</a>
 {% endfor %}
 
 {% else %}

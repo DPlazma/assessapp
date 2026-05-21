@@ -1,9 +1,12 @@
 <!-- Assessment Gaps -->
+{% load student_tags %}
 {% with gaps=widget.extra_context.assessment_gaps %}
 {% if gaps %}
 <div class="list-group list-group-flush">
     {% for student, count in gaps %}
-    <div class="list-group-item px-0 py-2 small d-flex align-items-center justify-content-between">
+    {% student_url student as gap_link %}
+    <a class="list-group-item list-group-item-action px-0 py-2 small d-flex align-items-center justify-content-between"
+       href="{{ gap_link }}">
         <div class="d-flex align-items-center">
             <div class="rounded-circle bg-warning bg-opacity-25 text-warning d-flex align-items-center justify-content-center me-2 flex-shrink-0"
                  style="width: 30px; height: 30px; font-size: 0.75rem;">
@@ -14,7 +17,7 @@
         <span class="badge {% if count == 0 %}bg-danger{% elif count < 5 %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
             {{ count }} rec{{ count|pluralize:"ord,ords" }}
         </span>
-    </div>
+    </a>
     {% endfor %}
 </div>
 <div class="small text-muted mt-2">Students with fewest assessments this term.</div>

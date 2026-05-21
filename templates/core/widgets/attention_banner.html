@@ -3,12 +3,30 @@
 {% if items %}
 <div class="d-flex flex-column gap-2">
     {% for item in items %}
-    <div class="d-flex align-items-center p-2 rounded bg-{{ item.colour }} bg-opacity-10">
-        <i class="bi {{ item.icon }} text-{{ item.colour }} me-3" style="font-size: 1.2rem;"></i>
-        <span class="small fw-semibold">{{ item.text }}</span>
-    </div>
+    <a href="{{ item.link|default:'#' }}"
+       class="d-flex align-items-center p-2 rounded bg-{{ item.colour }} bg-opacity-10 text-decoration-none text-body attention-item"
+       style="border-left: 4px solid var(--bs-{{ item.colour }});">
+        <i class="bi {{ item.icon }} text-{{ item.colour }} me-3" style="font-size: 1.4rem;"></i>
+        <div class="flex-grow-1">
+            <div class="fw-semibold small">{{ item.text }}</div>
+            {% if item.detail %}
+            <div class="text-muted" style="font-size: 0.75rem;">{{ item.detail }}</div>
+            {% endif %}
+            {% if item.pct is not None %}
+            <div class="progress mt-1" style="height: 4px;">
+                <div class="progress-bar bg-{{ item.colour }}" role="progressbar"
+                     style="width: {{ item.pct }}%;"
+                     aria-valuenow="{{ item.pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            {% endif %}
+        </div>
+        <i class="bi bi-chevron-right text-muted ms-2"></i>
+    </a>
     {% endfor %}
 </div>
+<style>
+    .attention-item:hover { background-color: rgba(0,0,0,0.04) !important; }
+</style>
 {% else %}
 <div class="text-center text-muted py-3">
     <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
