@@ -1,0 +1,71 @@
+"""Template helpers for student navigation.
+
+`student_url` chooses the right landing page for a student link based on the
+current user.  For most users (teachers, TAs, SLT, superusers) this is the
+Assess page, matching previous behaviour.  Subject Leads and Pathway Leads
+land on the Progress page instead, *unless* they teach the student's class
+(via `ClassAssignment`) or are actively covering it (`ClassCover`).
+"""
+
+from django import template
+from django.urls import reverse
+from django.utils import timezone
+
+register = template.Library()
+
+
+def _can_assess_student_class(user, student):
+    """True if the user teaches or is actively covering this student's class."""
+    cg_id = getattr(student, "class_group_id", None)
+    if not cg_id:
+        return False
+    from staff.models import ClassAssignment, ClassCover
+
+    if ClassAssignment.objects.filter(user=user, class_group_id=cg_id).exists():
+        return True
+    today = timezone.now().date()
+    return ClassCover.objects.filter(
+        user=user,
+        class_group_id=cg_id,
+        start_date__lte=today,
+        end_date__gte=today,
+    ).exists()
+
+
+def student_landing_url(user, student, subject=None):
+    """Return the URL a given user should land on when opening this student.
+
+    If `subject` is provided, the Assess destination is the subject-specific
+    Assess page; otherwise the student subjects hub. Progress is the fallback
+    when a Subject/Pathway Lead is not teaching the student's class.
+    """
+
+    def _assess_url():
+        if subject is not None:
+            subj_pk = getattr(subject, "pk", subject)
+            return reverse(
+                "assessments:assess_student", args=[student.pk, subj_pk]
+            )
+        return reverse("assessments:student_subjects", args=[student.pk])
+
+    if not user or not getattr(user, "is_authenticated", False):
+        return _assess_url()
+
+    profile = getattr(user, "staffprofile", None)
+    role = getattr(profile, "role", None) if profile else None
+
+    # Rule only applies to subject leads and pathway leads.
+    if role not in ("subject_lead", "pathway_lead"):
+        return _assess_url()
+
+    if _can_assess_student_class(user, student):
+        return _assess_url()
+
+    return reverse("students:progress", args=[student.pk])
+
+
+@register.simple_tag(takes_context=True)
+def student_url(context, student, subject=None):
+    request = context.get("request")
+    user = getattr(request, "user", None) if request else None
+    return student_landing_url(user, student, subject)

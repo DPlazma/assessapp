@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load student_tags %}
 {% block title %}My Subjects — AssessApp{% endblock %}
 
 {% block content %}
@@ -79,16 +80,17 @@
                                                             </thead>
                                                             <tbody>
                                                             {% for student in cls.students %}
+                                                                {% student_url student item.subject as _stu_url %}
                                                                 <tr>
                                                                     <td>
-                                                                        <a href="{% url 'assessments:assess_student' student.pk item.subject.pk %}"
+                                                                        <a href="{{ _stu_url }}"
                                                                            class="text-decoration-none">
                                                                             {{ student.full_name }}
                                                                         </a>
                                                                     </td>
                                                                     <td>{{ student.phase }}</td>
                                                                     <td class="text-end">
-                                                                        <a href="{% url 'assessments:assess_student' student.pk item.subject.pk %}"
+                                                                        <a href="{{ _stu_url }}"
                                                                            class="btn btn-sm btn-outline-primary">
                                                                             <i class="bi bi-pencil-square me-1"></i>Assess
                                                                         </a>

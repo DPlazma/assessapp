@@ -15,8 +15,16 @@ from core.models import AcademicYear, Term
 
 @login_required
 def student_detail(request, pk):
-    """Redirect to student hub (student_subjects)."""
-    return redirect("assessments:student_subjects", student_id=pk)
+    """Redirect to the right landing page for this user/student pair.
+
+    Subject Leads and Pathway Leads land on the Progress page unless they
+    teach or are covering the student's class.  Everyone else lands on the
+    Assess hub as before.
+    """
+    from .templatetags.student_tags import student_landing_url
+
+    student = get_object_or_404(Student, pk=pk)
+    return redirect(student_landing_url(request.user, student))
 
 
 @login_required

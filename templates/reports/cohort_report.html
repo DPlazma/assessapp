@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load assess_tags %}
+{% load student_tags %}
 {% block title %}Cohort Report — AssessApp{% endblock %}
 
 {% block content %}
@@ -69,7 +70,7 @@
         {% for student in students %}
         <tr>
             <td class="sticky-col fw-bold">
-                <a href="{% url 'assessments:student_subjects' student.pk %}" class="text-decoration-none">
+                <a href="{% student_url student %}" class="text-decoration-none">
                     {{ student.full_name }}
                 </a>
             </td>
