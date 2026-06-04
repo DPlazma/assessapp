@@ -120,15 +120,15 @@
     </div>
 </div>
 
-{# ──────────────────────────────────────────────────────────────────
-   Focused-subject view: one navigation strip + one chart card.
-   The chart card switches mode based on focus:
-     focus_area      → level breakdown for that area
-     topic+level OK  → topic & level stacked bar
-     otherwise       → topic-only bar
-   The topic chips strip is always present so the user can jump between
-   topics (or clear the area focus) without the chart shape changing.
-   ────────────────────────────────────────────────────────────────── #}
+{% comment %}
+Focused-subject view: one navigation strip + one chart card.
+The chart card switches mode based on focus:
+  focus_area      → level breakdown for that area
+  topic+level OK  → topic & level stacked bar
+  otherwise       → topic-only bar
+The topic chips strip is always present so the user can jump between
+topics (or clear the area focus) without the chart shape changing.
+{% endcomment %}
 {% if focus_subject and area_breakdown %}
 
 {# Topic navigation chips — always visible when a subject is focused #}
