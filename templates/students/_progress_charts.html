@@ -1,0 +1,347 @@
+{# Partial: focus switcher + chart cards. Used full-page and as HTMX swap target. #}
+{# Container with id="progress-charts" is in the parent template; this is the swap contents. #}
+
+{# ── Focus breadcrumb / context switcher ── #}
+<div class="card mb-3 shadow-sm">
+    <div class="card-body py-2 d-flex align-items-center flex-wrap gap-2">
+        <span class="text-muted small"><i class="bi bi-funnel me-1"></i>Focus:</span>
+        <a href="{% url 'students:progress' student.pk %}?view=summary"
+           hx-get="{% url 'students:progress' student.pk %}?view=summary&partial=1"
+           hx-target="#progress-charts" hx-swap="innerHTML" hx-push-url="{% url 'students:progress' student.pk %}?view=summary"
+           class="badge text-decoration-none {% if not focus_subject %}bg-primary{% else %}bg-light text-dark border{% endif %}">
+            All subjects
+        </a>
+        {% if focus_subject %}
+            <i class="bi bi-chevron-right text-muted small"></i>
+            <a href="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}"
+               hx-get="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&partial=1"
+               hx-target="#progress-charts" hx-swap="innerHTML" hx-push-url="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}"
+               class="badge text-decoration-none {% if not focus_area %}bg-primary{% else %}bg-light text-dark border{% endif %}">
+                {{ focus_subject.name }}
+            </a>
+        {% endif %}
+        {% if focus_area %}
+            <i class="bi bi-chevron-right text-muted small"></i>
+            <span class="badge bg-primary">{{ focus_area.name }}</span>
+        {% endif %}
+        <div class="ms-auto d-flex align-items-center gap-2">
+            <span class="htmx-indicator spinner-border spinner-border-sm text-muted" role="status"></span>
+            <select class="form-select form-select-sm"
+                    name="subject"
+                    hx-get="{% url 'students:progress' student.pk %}?view=summary&partial=1"
+                    hx-trigger="change"
+                    hx-target="#progress-charts" hx-swap="innerHTML"
+                    hx-push-url="true"
+                    hx-vals='js:{subject: event.target.value}'>
+                <option value="">— Jump to subject —</option>
+                {% for subject in subjects %}
+                <option value="{{ subject.pk }}" {% if focus_subject and focus_subject.pk == subject.pk %}selected{% endif %}>
+                    {{ subject.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+</div>
+
+{% if overall_total > 0 %}
+{# ── Overall doughnut + per-subject bar ── #}
+<div class="row g-2 mb-3">
+    <div class="col-12 col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light py-1">
+                <h6 class="mb-0 small"><i class="bi bi-pie-chart me-1"></i>
+                    {% if focus_area %}{{ focus_area.name }}{% elif focus_subject %}{{ focus_subject.name }}{% else %}Overall{% endif %}
+                </h6>
+            </div>
+            <div class="card-body p-2">
+                <div class="chart-box" style="position:relative; height:180px;">
+                    <canvas id="chartsOverallDoughnut"></canvas>
+                </div>
+                <div class="text-center small text-muted mt-1">
+                    {{ overall_total }} statement{{ overall_total|pluralize }}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-8">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light py-1">
+                <h6 class="mb-0 small"><i class="bi bi-bar-chart-steps me-1"></i>By subject</h6>
+            </div>
+            <div class="card-body p-2">
+                <div class="chart-box" style="position:relative; height:{% if subject_summaries|length > 10 %}380px{% elif subject_summaries|length > 5 %}280px{% else %}200px{% endif %};">
+                    <canvas id="chartsSubjectBar"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Per-subject mini doughnuts (clickable to focus) ── #}
+<div class="card mb-3 shadow-sm">
+    <div class="card-header bg-light py-1 d-flex align-items-center justify-content-between">
+        <h6 class="mb-0 small"><i class="bi bi-grid-3x3-gap me-1"></i>Per-subject breakdown</h6>
+        <small class="text-muted">Click a subject to drill in</small>
+    </div>
+    <div class="card-body p-2">
+        <div class="row g-2">
+            {% for s in subject_summaries %}
+            <div class="col-4 col-sm-3 col-md-2">
+                <a href="{% url 'students:progress' student.pk %}?view=summary&subject={{ s.subject.pk }}"
+                   hx-get="{% url 'students:progress' student.pk %}?view=summary&subject={{ s.subject.pk }}&partial=1"
+                   hx-target="#progress-charts" hx-swap="innerHTML"
+                   hx-push-url="{% url 'students:progress' student.pk %}?view=summary&subject={{ s.subject.pk }}"
+                   class="text-decoration-none text-dark">
+                    <div class="card h-100 border {% if focus_subject and focus_subject.pk == s.subject.pk %}border-primary{% endif %}">
+                        <div class="card-body p-1 text-center">
+                            <div class="small text-truncate fw-bold" title="{{ s.subject.name }}" style="font-size:0.75rem;">{{ s.subject.name }}</div>
+                            <div class="chart-box mx-auto" style="position:relative; height:80px; width:80px;">
+                                <canvas class="subjectDoughnut"
+                                        data-sec="{{ s.secure }}" data-dev="{{ s.developing }}"
+                                        data-eme="{{ s.emerging }}" data-nya="{{ s.not_yet }}"></canvas>
+                            </div>
+                            <div class="text-muted" style="font-size:0.7rem;">{{ s.total }} stmt{{ s.total|pluralize }}</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+{# ── Area breakdown (when a subject is in focus) ── #}
+{% if focus_subject and area_breakdown %}
+<div class="card mb-3 shadow-sm">
+    <div class="card-header bg-light py-1">
+        <h6 class="mb-0 small"><i class="bi bi-bar-chart-line me-1"></i>{{ focus_subject.name }} — by topic / area</h6>
+        <small class="text-muted">Click an area to drill into its levels</small>
+    </div>
+    <div class="card-body p-2">
+        <div class="chart-box" style="position:relative; height:{% if area_breakdown|length > 10 %}420px{% elif area_breakdown|length > 5 %}300px{% else %}220px{% endif %};">
+            <canvas id="chartsAreaBar"></canvas>
+        </div>
+        <div class="mt-2 d-flex flex-wrap gap-1">
+            {% for a in area_breakdown %}
+            <a href="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&area={{ a.area.pk }}"
+               hx-get="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&area={{ a.area.pk }}&partial=1"
+               hx-target="#progress-charts" hx-swap="innerHTML"
+               hx-push-url="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&area={{ a.area.pk }}"
+               class="badge text-decoration-none {% if focus_area and focus_area.pk == a.area.pk %}bg-primary{% else %}bg-light text-dark border{% endif %}">
+                {{ a.area.name }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── Level (sub-area) breakdown (when an area is in focus) ── #}
+{% if focus_area and level_breakdown %}
+<div class="card mb-3 shadow-sm">
+    <div class="card-header bg-light py-1">
+        <h6 class="mb-0 small"><i class="bi bi-layers me-1"></i>{{ focus_area.name }} — by level</h6>
+    </div>
+    <div class="card-body p-2">
+        <div class="chart-box" style="position:relative; height:{% if level_breakdown|length > 5 %}260px{% else %}200px{% endif %};">
+            <canvas id="chartsLevelBar"></canvas>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── Term-over-term trend (% Secure) ── #}
+{% if trend_terms %}
+<div class="card mb-3 shadow-sm">
+    <div class="card-header bg-light py-1">
+        <h6 class="mb-0 small"><i class="bi bi-graph-up me-1"></i>Progress over time
+            {% if focus_area %}— {{ focus_area.name }}{% elif focus_subject %}— {{ focus_subject.name }}{% endif %}
+        </h6>
+        <small class="text-muted">% of statements at Secure, by term</small>
+    </div>
+    <div class="card-body p-2">
+        <div class="chart-box" style="position:relative; height:240px;">
+            <canvas id="chartsTrendLine"></canvas>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-pie-chart" style="font-size: 2rem;"></i>
+    <p class="mt-2">No assessment data yet.</p>
+</div>
+{% endif %}
+
+{# Chart data JSON for the init script #}
+{{ subject_chart_data|json_script:"subject-breakdown-data" }}
+{% if area_chart_data %}{{ area_chart_data|json_script:"area-breakdown-data" }}{% endif %}
+{% if level_chart_data %}{{ level_chart_data|json_script:"level-breakdown-data" }}{% endif %}
+{% if trend_terms %}{{ trend_terms|json_script:"trend-terms-data" }}{{ trend_data|json_script:"trend-series-data" }}{% endif %}
+{{ overall_nya|json_script:"overall-nya" }}
+{{ overall_emerging|json_script:"overall-emerging" }}
+{{ overall_developing|json_script:"overall-developing" }}
+{{ overall_secure|json_script:"overall-secure" }}
+
+<script>
+(function() {
+    if (typeof Chart === 'undefined') { return; }
+    const RAG_COLOURS = ['#6c757d', '#dc3545', '#fd7e14', '#198754'];
+    const RAG_LABELS  = ['Not Assessed', 'Emerging', 'Developing', 'Secure'];
+    const readJson = (id) => {
+        const el = document.getElementById(id);
+        return el ? JSON.parse(el.textContent) : null;
+    };
+    const killChart = (canvas) => {
+        if (!canvas) return;
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+    };
+
+    const overallCanvas = document.getElementById('chartsOverallDoughnut');
+    if (overallCanvas) {
+        killChart(overallCanvas);
+        new Chart(overallCanvas, {
+            type: 'doughnut',
+            data: {
+                labels: RAG_LABELS,
+                datasets: [{
+                    data: [readJson('overall-nya'), readJson('overall-emerging'),
+                           readJson('overall-developing'), readJson('overall-secure')],
+                    backgroundColor: RAG_COLOURS,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom' } },
+                cutout: '55%',
+            }
+        });
+    }
+
+    const subjBarCanvas = document.getElementById('chartsSubjectBar');
+    const subjData = readJson('subject-breakdown-data');
+    if (subjBarCanvas && subjData) {
+        killChart(subjBarCanvas);
+        new Chart(subjBarCanvas, {
+            type: 'bar',
+            data: {
+                labels: subjData.map(s => s.name),
+                datasets: [
+                    { label: 'Not Assessed', data: subjData.map(s => s.not_yet),    backgroundColor: RAG_COLOURS[0] },
+                    { label: 'Emerging',     data: subjData.map(s => s.emerging),   backgroundColor: RAG_COLOURS[1] },
+                    { label: 'Developing',   data: subjData.map(s => s.developing), backgroundColor: RAG_COLOURS[2] },
+                    { label: 'Secure',       data: subjData.map(s => s.secure),     backgroundColor: RAG_COLOURS[3] },
+                ]
+            },
+            options: {
+                indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                scales: { x: { stacked: true }, y: { stacked: true } },
+                plugins: { legend: { position: 'bottom' } },
+            }
+        });
+    }
+
+    document.querySelectorAll('.subjectDoughnut').forEach(canvas => {
+        killChart(canvas);
+        const ds = canvas.dataset;
+        new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels: RAG_LABELS,
+                datasets: [{
+                    data: [+ds.nya, +ds.eme, +ds.dev, +ds.sec],
+                    backgroundColor: RAG_COLOURS,
+                    borderWidth: 1,
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { enabled: true } },
+                cutout: '60%',
+            }
+        });
+    });
+
+    const areaCanvas = document.getElementById('chartsAreaBar');
+    const areaData = readJson('area-breakdown-data');
+    if (areaCanvas && areaData) {
+        killChart(areaCanvas);
+        new Chart(areaCanvas, {
+            type: 'bar',
+            data: {
+                labels: areaData.map(a => a.name),
+                datasets: [
+                    { label: 'Not Assessed', data: areaData.map(a => a.not_yet),    backgroundColor: RAG_COLOURS[0] },
+                    { label: 'Emerging',     data: areaData.map(a => a.emerging),   backgroundColor: RAG_COLOURS[1] },
+                    { label: 'Developing',   data: areaData.map(a => a.developing), backgroundColor: RAG_COLOURS[2] },
+                    { label: 'Secure',       data: areaData.map(a => a.secure),     backgroundColor: RAG_COLOURS[3] },
+                ]
+            },
+            options: {
+                indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                scales: { x: { stacked: true }, y: { stacked: true } },
+                plugins: { legend: { position: 'bottom' } },
+            }
+        });
+    }
+
+    const lvlCanvas = document.getElementById('chartsLevelBar');
+    const lvlData = readJson('level-breakdown-data');
+    if (lvlCanvas && lvlData) {
+        killChart(lvlCanvas);
+        new Chart(lvlCanvas, {
+            type: 'bar',
+            data: {
+                labels: lvlData.map(l => l.name),
+                datasets: [
+                    { label: 'Not Assessed', data: lvlData.map(l => l.not_yet),    backgroundColor: RAG_COLOURS[0] },
+                    { label: 'Emerging',     data: lvlData.map(l => l.emerging),   backgroundColor: RAG_COLOURS[1] },
+                    { label: 'Developing',   data: lvlData.map(l => l.developing), backgroundColor: RAG_COLOURS[2] },
+                    { label: 'Secure',       data: lvlData.map(l => l.secure),     backgroundColor: RAG_COLOURS[3] },
+                ]
+            },
+            options: {
+                indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                scales: { x: { stacked: true }, y: { stacked: true } },
+                plugins: { legend: { position: 'bottom' } },
+            }
+        });
+    }
+
+    const trendCanvas = document.getElementById('chartsTrendLine');
+    const trendTerms = readJson('trend-terms-data');
+    if (trendCanvas && trendTerms) {
+        killChart(trendCanvas);
+        const series = readJson('trend-series-data') || {};
+        const palette = [
+            '#0d6efd', '#dc3545', '#198754', '#ffc107', '#6610f2',
+            '#fd7e14', '#20c997', '#d63384', '#0dcaf0', '#6c757d'
+        ];
+        const datasets = Object.entries(series).map(([name, points], i) => ({
+            label: name,
+            data: points,
+            borderColor: palette[i % palette.length],
+            backgroundColor: palette[i % palette.length],
+            tension: 0.3,
+            spanGaps: true,
+        }));
+        new Chart(trendCanvas, {
+            type: 'line',
+            data: { labels: trendTerms, datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        min: 0, max: 100,
+                        title: { display: true, text: '% Secure' },
+                        ticks: { callback: v => v + '%' }
+                    }
+                },
+                plugins: { legend: { position: 'bottom' } },
+            }
+        });
+    }
+})();
+</script>

@@ -680,6 +680,10 @@ def student_progress(request, pk):
             "cached_ai_patterns": request.session.get(f'ai_patterns_{student.pk}', ''),
         })
 
+    if active_view == "summary" and (
+        request.GET.get("partial") == "1" or request.headers.get("HX-Request")
+    ):
+        return render(request, "students/_progress_charts.html", context)
     return render(request, "students/student_progress.html", context)
 
 
