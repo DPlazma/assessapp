@@ -80,10 +80,27 @@ def student_progress(request, pk):
             active_period = str(default_term)
 
     # ── Shared context ───────────────────────────────────────────────
-    subjects = Subject.objects.filter(
-        is_active=True,
-        applicable_pathways__contains=[student.pathway],
-        applicable_phases__contains=[student.phase],
+    # Subjects this student is actually assigned to (via frameworks assigned
+    # directly to the student or to their class group). Mirrors the logic in
+    # assessments.views.student_subjects so the Progress page never shows
+    # subjects the student isn't on.
+    from assessments.models import FrameworkAssignment
+    assigned_fw_ids = set(
+        FrameworkAssignment.objects.filter(student=student)
+        .values_list("framework_id", flat=True)
+    )
+    if student.class_group:
+        assigned_fw_ids |= set(
+            FrameworkAssignment.objects.filter(class_group=student.class_group)
+            .values_list("framework_id", flat=True)
+        )
+    subjects = (
+        Subject.objects.filter(
+            is_active=True,
+            assessment_areas__framework_id__in=assigned_fw_ids,
+        )
+        .distinct()
+        .order_by("order", "name")
     )
 
     context = {
@@ -508,11 +525,12 @@ def student_progress(request, pk):
                 counts[latest.get(sid_, "NYA")] += 1
             return counts, len(ids)
 
-        # ── Per-subject RAG breakdown (always all subjects, for grid + bar) ──
+        # ── Per-subject RAG breakdown (always all assigned subjects, for grid + bar) ──
         subject_summaries = []
         for subject in subjects:
             stmt_ids = AssessmentStatement.objects.filter(
-                area__subject=subject
+                area__subject=subject,
+                area__framework_id__in=assigned_fw_ids,
             ).values_list("pk", flat=True)
             counts, total = _counts_for(stmt_ids)
             subject_summaries.append({
@@ -524,11 +542,12 @@ def student_progress(request, pk):
                 "not_yet": counts["NYA"],
             })
 
-        # ── Per-area breakdown for focus subject ──
+        # ── Per-area breakdown for focus subject (only from assigned frameworks) ──
         area_breakdown = []
         if focus_subject:
             for area in AssessmentArea.objects.filter(
-                subject=focus_subject
+                subject=focus_subject,
+                framework_id__in=assigned_fw_ids,
             ).order_by("order", "name"):
                 stmt_ids = area.statements.values_list("pk", flat=True)
                 counts, total = _counts_for(stmt_ids)
@@ -568,7 +587,8 @@ def student_progress(request, pk):
         topic_level_breakdown = []
         if focus_subject and not focus_area:
             for area in AssessmentArea.objects.filter(
-                subject=focus_subject
+                subject=focus_subject,
+                framework_id__in=assigned_fw_ids,
             ).order_by("order", "name"):
                 sub_areas = list(SubArea.objects.filter(area=area).order_by("order", "name"))
                 if not sub_areas:
