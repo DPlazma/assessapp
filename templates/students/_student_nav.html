@@ -1,7 +1,7 @@
 {% comment %}
 Shared student profile header + tabs.
 Use: include "students/_student_nav.html" with active_tab="overview"
-Values: overview | subjects | progress | journey | ehcp | evidence
+Values: overview | subjects | progress | ehcp | evidence
 {% endcomment %}
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body py-3">
@@ -47,12 +47,6 @@ Values: overview | subjects | progress | journey | ehcp | evidence
             <a class="nav-link py-2{% if active_tab == 'progress' %} active{% endif %}"
                href="{% url 'students:progress' student.pk %}">
                 <i class="bi bi-graph-up me-1"></i>Progress
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link py-2{% if active_tab == 'journey' %} active{% endif %}"
-               href="{% url 'students:learning_journey' student.pk %}">
-                <i class="bi bi-journal-richtext me-1"></i>Journey
             </a>
         </li>
         <li class="nav-item">

@@ -48,9 +48,9 @@
                     </small>
                 </div>
             </a>
-            <a href="{% url 'students:learning_journey' student.pk %}"
+            <a href="{% url 'students:progress' student.pk %}?view=summary"
                class="btn btn-sm btn-outline-secondary me-2"
-               title="Learning Journey">
+               title="Progress & Journey">
                 <i class="bi bi-journal-text"></i>
             </a>
             <a href="{{ student_link }}"
