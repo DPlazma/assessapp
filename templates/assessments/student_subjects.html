@@ -68,7 +68,7 @@
                             <h6 class="card-title mt-2 mb-0 small">{{ subject.name }}</h6>
                         </div>
                     </a>
-                    <a href="{% url 'students:progress' student.pk %}?view=charts&subject={{ subject.pk }}"
+                    <a href="{% url 'students:progress' student.pk %}?view=summary&subject={{ subject.pk }}"
                        class="position-absolute top-0 end-0 m-1 text-muted"
                        title="View progress charts for {{ subject.name }}">
                         <i class="bi bi-graph-up small"></i>

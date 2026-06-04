@@ -463,11 +463,16 @@ def student_progress(request, pk):
         })
 
     # ==================================================================
-    # CHARTS VIEW (visual progress breakdown)
+    # SUMMARY VIEW (merged Learning Journey + Charts)
     # ==================================================================
-    elif active_view == "charts":
+    else:
+        # Override active_view to canonical name (covers "charts" legacy links too)
+        active_view = "summary"
+        context["active_view"] = active_view
+
         from assessments.models import SubArea, AssessmentStatement
 
+        # ── Focus from query params ──
         focus_subject = None
         focus_area = None
         sid = request.GET.get("subject")
@@ -479,8 +484,7 @@ def student_progress(request, pk):
             if focus_area and not focus_subject:
                 focus_subject = focus_area.subject
 
-        def _latest_status_map(student, statement_ids):
-            """Return {statement_id: latest_status} (SQLite-safe)."""
+        def _latest_status_map(statement_ids):
             latest = {}
             seen = set()
             for r in (
@@ -499,19 +503,19 @@ def student_progress(request, pk):
         def _counts_for(statement_ids):
             counts = {"SEC": 0, "DEV": 0, "EME": 0, "NYA": 0}
             ids = list(statement_ids)
-            latest = _latest_status_map(student, ids)
+            latest = _latest_status_map(ids)
             for sid_ in ids:
                 counts[latest.get(sid_, "NYA")] += 1
             return counts, len(ids)
 
-        # Per-subject RAG breakdown
-        subject_breakdown = []
+        # ── Per-subject RAG breakdown (always all subjects, for grid + bar) ──
+        subject_summaries = []
         for subject in subjects:
             stmt_ids = AssessmentStatement.objects.filter(
                 area__subject=subject
             ).values_list("pk", flat=True)
             counts, total = _counts_for(stmt_ids)
-            subject_breakdown.append({
+            subject_summaries.append({
                 "subject": subject,
                 "total": total,
                 "secure": counts["SEC"],
@@ -520,7 +524,7 @@ def student_progress(request, pk):
                 "not_yet": counts["NYA"],
             })
 
-        # Per-area RAG breakdown for focus_subject (if any)
+        # ── Per-area breakdown for focus subject ──
         area_breakdown = []
         if focus_subject:
             for area in AssessmentArea.objects.filter(
@@ -537,7 +541,7 @@ def student_progress(request, pk):
                     "not_yet": counts["NYA"],
                 })
 
-        # Per-sub-area (level) breakdown for focus_area (if any)
+        # ── Per-level breakdown for focus area ──
         level_breakdown = []
         if focus_area:
             sub_areas = list(SubArea.objects.filter(area=focus_area).order_by("order", "name"))
@@ -558,9 +562,31 @@ def student_progress(request, pk):
                     "not_yet": counts["NYA"],
                 })
 
-        # Term-by-term trend from snapshots (% Secure per subject per term)
+        # ── Overall totals: reflect focus (area > subject > everything) ──
+        if focus_area:
+            overall_total = sum(l["total"] for l in level_breakdown)
+            overall_secure = sum(l["secure"] for l in level_breakdown)
+            overall_developing = sum(l["developing"] for l in level_breakdown)
+            overall_emerging = sum(l["emerging"] for l in level_breakdown)
+            overall_nya = sum(l["not_yet"] for l in level_breakdown)
+        elif focus_subject:
+            overall_total = sum(a["total"] for a in area_breakdown)
+            overall_secure = sum(a["secure"] for a in area_breakdown)
+            overall_developing = sum(a["developing"] for a in area_breakdown)
+            overall_emerging = sum(a["emerging"] for a in area_breakdown)
+            overall_nya = sum(a["not_yet"] for a in area_breakdown)
+        else:
+            overall_total = sum(s["total"] for s in subject_summaries)
+            overall_secure = sum(s["secure"] for s in subject_summaries)
+            overall_developing = sum(s["developing"] for s in subject_summaries)
+            overall_emerging = sum(s["emerging"] for s in subject_summaries)
+            overall_nya = sum(s["not_yet"] for s in subject_summaries)
+
+        # ── Term-by-term trend (% Secure) ──
         snap_qs = AssessmentSnapshot.objects.filter(student=student)
-        if focus_subject:
+        if focus_area:
+            snap_qs = snap_qs.filter(area=focus_area)
+        elif focus_subject:
             snap_qs = snap_qs.filter(area__subject=focus_subject)
         snap_qs = snap_qs.select_related("area__subject", "term__academic_year").order_by(
             "term__academic_year__start_date", "term__start_date"
@@ -576,7 +602,6 @@ def student_progress(request, pk):
             agg = bucket.setdefault(term_label, {"sec": 0, "total": 0})
             agg["sec"] += snap.secure_count
             agg["total"] += snap.total_statements
-
         trend_data = {
             subj: [
                 round((bucket[t]["sec"] / bucket[t]["total"]) * 100, 1)
@@ -586,12 +611,7 @@ def student_progress(request, pk):
             for subj, bucket in trend_map.items()
         }
 
-        overall_total = sum(s["total"] for s in subject_breakdown)
-        overall_secure = sum(s["secure"] for s in subject_breakdown)
-        overall_developing = sum(s["developing"] for s in subject_breakdown)
-        overall_emerging = sum(s["emerging"] for s in subject_breakdown)
-        overall_nya = sum(s["not_yet"] for s in subject_breakdown)
-
+        # ── JSON-safe chart data ──
         def _to_chart(items, key):
             return [
                 {
@@ -606,7 +626,7 @@ def student_progress(request, pk):
                 for it in items
             ]
 
-        subject_chart_data = _to_chart(subject_breakdown, "subject")
+        subject_chart_data = _to_chart(subject_summaries, "subject")
         area_chart_data = _to_chart(area_breakdown, "area") if area_breakdown else []
         level_chart_data = [
             {
@@ -620,67 +640,7 @@ def student_progress(request, pk):
             for it in level_breakdown
         ]
 
-        context.update({
-            "focus_subject": focus_subject,
-            "focus_area": focus_area,
-            "subject_breakdown": subject_breakdown,
-            "area_breakdown": area_breakdown,
-            "level_breakdown": level_breakdown,
-            "subject_chart_data": subject_chart_data,
-            "area_chart_data": area_chart_data,
-            "level_chart_data": level_chart_data,
-            "trend_terms": term_order,
-            "trend_data": trend_data,
-            "overall_total": overall_total,
-            "overall_secure": overall_secure,
-            "overall_developing": overall_developing,
-            "overall_emerging": overall_emerging,
-            "overall_nya": overall_nya,
-        })
-
-    # ==================================================================
-    # SUMMARY VIEW (merged Learning Journey)
-    # ==================================================================
-    else:
-        # Override active_view to canonical name
-        active_view = "summary"
-        context["active_view"] = active_view
-
-        # RAG summary per subject
-        subject_summaries = []
-        for subject in subjects:
-            areas = AssessmentArea.objects.filter(subject=subject)
-            total_stmts = 0
-            status_counts = {"SEC": 0, "DEV": 0, "EME": 0, "NYA": 0}
-            for area in areas:
-                stmts = area.statements.all()
-                total_stmts += stmts.count()
-                for stmt in stmts:
-                    latest = (
-                        AssessmentRecord.objects.filter(student=student, statement=stmt)
-                        .order_by("-assessed_date", "-created_at")
-                        .first()
-                    )
-                    if latest:
-                        status_counts[latest.status] += 1
-                    else:
-                        status_counts["NYA"] += 1
-            subject_summaries.append({
-                "subject": subject,
-                "total": total_stmts,
-                "secure": status_counts["SEC"],
-                "developing": status_counts["DEV"],
-                "emerging": status_counts["EME"],
-                "not_yet": status_counts["NYA"],
-            })
-
-        overall_total = sum(s["total"] for s in subject_summaries)
-        overall_secure = sum(s["secure"] for s in subject_summaries)
-        overall_developing = sum(s["developing"] for s in subject_summaries)
-        overall_emerging = sum(s["emerging"] for s in subject_summaries)
-        overall_nya = sum(s["not_yet"] for s in subject_summaries)
-
-        # Snapshot history grouped by term
+        # ── Termly snapshot table (unchanged) ──
         snapshots = (
             AssessmentSnapshot.objects.filter(student=student)
             .select_related("area__subject", "term__academic_year")
@@ -693,13 +653,22 @@ def student_progress(request, pk):
                 snapshot_by_term[term_label] = []
             snapshot_by_term[term_label].append(snap)
 
-        # Check if AI is available
+        # AI availability
         from core.models import AISettings
         ai = AISettings.load()
         ai_available = ai.enabled and ai.provider != "none"
 
         context.update({
             "subject_summaries": subject_summaries,
+            "focus_subject": focus_subject,
+            "focus_area": focus_area,
+            "area_breakdown": area_breakdown,
+            "level_breakdown": level_breakdown,
+            "subject_chart_data": subject_chart_data,
+            "area_chart_data": area_chart_data,
+            "level_chart_data": level_chart_data,
+            "trend_terms": term_order,
+            "trend_data": trend_data,
             "overall_total": overall_total,
             "overall_secure": overall_secure,
             "overall_developing": overall_developing,
