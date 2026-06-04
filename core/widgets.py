@@ -825,56 +825,48 @@ DEFAULT_LAYOUT = [
 
 # ── Role-based default layouts ──────────────────────────────────────
 
-# Which widgets are visible by default for each role group
+# Which widgets are visible by default for each role group.
+# Pathway/Subject Leads also teach classes, so they get the full teacher set
+# plus their lead-specific extras. SLT gets a stripped-down, school-wide view.
+_TEACHER_DEFAULTS = {
+    "school_overview": False,
+    "attention_banner": True,
+    "class_overview": True,
+    "my_subjects": False,
+    "my_class": True,
+    "assessment_summary": True,
+    "quick_actions": True,
+    "class_progress": True,
+    "recent_activity": True,
+    "ehcp_overview": True,
+    "evidence_stats": False,
+    "covering": True,
+    "upcoming_reviews": True,
+    "assessment_gaps": True,
+    "notifications_widget": False,
+}
+
 _ROLE_DEFAULTS = {
-    "teacher": {
-        "school_overview": False,
-        "attention_banner": True,
-        "class_overview": True,
-        "my_subjects": False,
-        "my_class": True,
-        "assessment_summary": True,
-        "quick_actions": True,
-        "class_progress": True,
-        "recent_activity": True,
-        "ehcp_overview": True,
-        "evidence_stats": False,
-        "covering": True,
-        "upcoming_reviews": False,
-        "assessment_gaps": False,
-        "notifications_widget": False,
-    },
-    "lead": {
-        "school_overview": False,
-        "attention_banner": True,
-        "class_overview": True,
-        "my_subjects": True,
-        "my_class": True,
-        "assessment_summary": True,
-        "quick_actions": True,
-        "class_progress": True,
-        "recent_activity": True,
-        "ehcp_overview": True,
-        "evidence_stats": False,
-        "covering": False,
-        "upcoming_reviews": False,
-        "assessment_gaps": True,
-        "notifications_widget": False,
-    },
+    "teacher": _TEACHER_DEFAULTS,
+    # Subject Lead = teacher + My Subjects
+    "lead": {**_TEACHER_DEFAULTS, "my_subjects": True},
+    # Pathway Lead = teacher (extras already covered: recent_activity, assessment_gaps)
+    "pathway_lead": {**_TEACHER_DEFAULTS},
+    # SLT = whole-school summary only; no per-class noise
     "slt": {
-        "school_overview": True,
-        "attention_banner": True,
-        "class_overview": True,
+        "school_overview": False,
+        "attention_banner": False,
+        "class_overview": False,
         "my_subjects": False,
         "my_class": False,
         "assessment_summary": True,
         "quick_actions": True,
-        "class_progress": True,
-        "recent_activity": True,
-        "ehcp_overview": True,
+        "class_progress": False,
+        "recent_activity": False,
+        "ehcp_overview": False,
         "evidence_stats": False,
         "covering": False,
-        "upcoming_reviews": True,
+        "upcoming_reviews": False,
         "assessment_gaps": True,
         "notifications_widget": False,
     },
