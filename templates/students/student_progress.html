@@ -292,54 +292,59 @@
 
 {% if overall_total > 0 %}
 {# ── Overall doughnut + per-subject grid ── #}
-<div class="row g-3 mb-4">
-    <div class="col-12 col-lg-4">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light py-2">
-                <h6 class="mb-0"><i class="bi bi-pie-chart me-2"></i>
+<div class="row g-2 mb-3">
+    <div class="col-12 col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light py-1">
+                <h6 class="mb-0 small"><i class="bi bi-pie-chart me-1"></i>
                     {% if focus_area %}{{ focus_area.name }}{% elif focus_subject %}{{ focus_subject.name }}{% else %}Overall{% endif %}
                 </h6>
             </div>
-            <div class="card-body">
-                <canvas id="chartsOverallDoughnut" height="220"></canvas>
-                <div class="text-center small text-muted mt-2">
+            <div class="card-body p-2">
+                <div class="chart-box" style="position:relative; height:180px;">
+                    <canvas id="chartsOverallDoughnut"></canvas>
+                </div>
+                <div class="text-center small text-muted mt-1">
                     {{ overall_total }} statement{{ overall_total|pluralize }}
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-12 col-lg-8">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light py-2">
-                <h6 class="mb-0"><i class="bi bi-bar-chart-steps me-2"></i>By subject</h6>
+    <div class="col-12 col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light py-1">
+                <h6 class="mb-0 small"><i class="bi bi-bar-chart-steps me-1"></i>By subject</h6>
             </div>
-            <div class="card-body">
-                <canvas id="chartsSubjectBar" height="260"></canvas>
+            <div class="card-body p-2">
+                <div class="chart-box" style="position:relative; height:{% if subject_breakdown|length > 10 %}380px{% elif subject_breakdown|length > 5 %}280px{% else %}200px{% endif %};">
+                    <canvas id="chartsSubjectBar"></canvas>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 {# ── Per-subject mini doughnuts (clickable to focus) ── #}
-<div class="card mb-4 shadow-sm">
-    <div class="card-header bg-light py-2">
-        <h6 class="mb-0"><i class="bi bi-grid-3x3-gap me-2"></i>Per-subject breakdown</h6>
-        <small class="text-muted">Click a subject to drill into its areas / levels</small>
+<div class="card mb-3 shadow-sm">
+    <div class="card-header bg-light py-1 d-flex align-items-center justify-content-between">
+        <h6 class="mb-0 small"><i class="bi bi-grid-3x3-gap me-1"></i>Per-subject breakdown</h6>
+        <small class="text-muted">Click a subject to drill in</small>
     </div>
-    <div class="card-body">
-        <div class="row g-3">
+    <div class="card-body p-2">
+        <div class="row g-2">
             {% for s in subject_breakdown %}
-            <div class="col-6 col-md-4 col-lg-3">
+            <div class="col-4 col-sm-3 col-md-2">
                 <a href="{% url 'students:progress' student.pk %}?view=charts&subject={{ s.subject.pk }}"
                    class="text-decoration-none text-dark">
                     <div class="card h-100 border {% if focus_subject and focus_subject.pk == s.subject.pk %}border-primary{% endif %}">
-                        <div class="card-body p-2 text-center">
-                            <h6 class="small mb-2 text-truncate" title="{{ s.subject.name }}">{{ s.subject.name }}</h6>
-                            <canvas class="subjectDoughnut"
-                                    data-sec="{{ s.secure }}" data-dev="{{ s.developing }}"
-                                    data-eme="{{ s.emerging }}" data-nya="{{ s.not_yet }}"
-                                    height="120"></canvas>
-                            <div class="small text-muted mt-1">{{ s.total }} stmt{{ s.total|pluralize }}</div>
+                        <div class="card-body p-1 text-center">
+                            <div class="small text-truncate fw-bold" title="{{ s.subject.name }}" style="font-size:0.75rem;">{{ s.subject.name }}</div>
+                            <div class="chart-box mx-auto" style="position:relative; height:80px; width:80px;">
+                                <canvas class="subjectDoughnut"
+                                        data-sec="{{ s.secure }}" data-dev="{{ s.developing }}"
+                                        data-eme="{{ s.emerging }}" data-nya="{{ s.not_yet }}"></canvas>
+                            </div>
+                            <div class="text-muted" style="font-size:0.7rem;">{{ s.total }} stmt{{ s.total|pluralize }}</div>
                         </div>
                     </div>
                 </a>
@@ -351,14 +356,16 @@
 
 {# ── Area breakdown (when a subject is in focus) ── #}
 {% if focus_subject and area_breakdown %}
-<div class="card mb-4 shadow-sm">
-    <div class="card-header bg-light py-2">
-        <h6 class="mb-0"><i class="bi bi-bar-chart-line me-2"></i>{{ focus_subject.name }} — by topic / area</h6>
+<div class="card mb-3 shadow-sm">
+    <div class="card-header bg-light py-1">
+        <h6 class="mb-0 small"><i class="bi bi-bar-chart-line me-1"></i>{{ focus_subject.name }} — by topic / area</h6>
         <small class="text-muted">Click an area to drill into its levels</small>
     </div>
-    <div class="card-body">
-        <canvas id="chartsAreaBar" height="{% if area_breakdown|length > 8 %}400{% else %}260{% endif %}"></canvas>
-        <div class="mt-3 d-flex flex-wrap gap-1">
+    <div class="card-body p-2">
+        <div class="chart-box" style="position:relative; height:{% if area_breakdown|length > 10 %}420px{% elif area_breakdown|length > 5 %}300px{% else %}220px{% endif %};">
+            <canvas id="chartsAreaBar"></canvas>
+        </div>
+        <div class="mt-2 d-flex flex-wrap gap-1">
             {% for a in area_breakdown %}
             <a href="{% url 'students:progress' student.pk %}?view=charts&subject={{ focus_subject.pk }}&area={{ a.area.pk }}"
                class="badge text-decoration-none {% if focus_area and focus_area.pk == a.area.pk %}bg-primary{% else %}bg-light text-dark border{% endif %}">
@@ -372,31 +379,35 @@
 
 {# ── Level (sub-area) breakdown (when an area is in focus) ── #}
 {% if focus_area and level_breakdown %}
-<div class="card mb-4 shadow-sm">
-    <div class="card-header bg-light py-2">
-        <h6 class="mb-0"><i class="bi bi-layers me-2"></i>{{ focus_area.name }} — by level</h6>
+<div class="card mb-3 shadow-sm">
+    <div class="card-header bg-light py-1">
+        <h6 class="mb-0 small"><i class="bi bi-layers me-1"></i>{{ focus_area.name }} — by level</h6>
     </div>
-    <div class="card-body">
-        <canvas id="chartsLevelBar" height="{% if level_breakdown|length > 6 %}320{% else %}220{% endif %}"></canvas>
+    <div class="card-body p-2">
+        <div class="chart-box" style="position:relative; height:{% if level_breakdown|length > 5 %}260px{% else %}200px{% endif %};">
+            <canvas id="chartsLevelBar"></canvas>
+        </div>
     </div>
 </div>
 {% endif %}
 
 {# ── Term-over-term trend (% Secure) ── #}
 {% if trend_terms %}
-<div class="card mb-4 shadow-sm">
-    <div class="card-header bg-light py-2">
-        <h6 class="mb-0"><i class="bi bi-graph-up me-2"></i>Progress over time
+<div class="card mb-3 shadow-sm">
+    <div class="card-header bg-light py-1">
+        <h6 class="mb-0 small"><i class="bi bi-graph-up me-1"></i>Progress over time
             {% if focus_subject %}— {{ focus_subject.name }}{% endif %}
         </h6>
-        <small class="text-muted">% of statements at Secure, by term (from termly snapshots)</small>
+        <small class="text-muted">% of statements at Secure, by term</small>
     </div>
-    <div class="card-body">
-        <canvas id="chartsTrendLine" height="280"></canvas>
+    <div class="card-body p-2">
+        <div class="chart-box" style="position:relative; height:240px;">
+            <canvas id="chartsTrendLine"></canvas>
+        </div>
     </div>
 </div>
 {% else %}
-<div class="alert alert-light border small">
+<div class="alert alert-light border small mb-3">
     <i class="bi bi-info-circle me-1"></i>
     No termly snapshots yet — the over-time trend will appear once snapshots are taken.
 </div>
