@@ -120,20 +120,29 @@
     </div>
 </div>
 
-{# ── Area breakdown (when a subject is in focus) ── #}
+{# ──────────────────────────────────────────────────────────────────
+   Focused-subject view: one navigation strip + one chart card.
+   The chart card switches mode based on focus:
+     focus_area      → level breakdown for that area
+     topic+level OK  → topic & level stacked bar
+     otherwise       → topic-only bar
+   The topic chips strip is always present so the user can jump between
+   topics (or clear the area focus) without the chart shape changing.
+   ────────────────────────────────────────────────────────────────── #}
 {% if focus_subject and area_breakdown %}
-{# Hide the topic-only chart when the topic+level chart will render below — they'd be redundant. #}
-{% if not topic_level_breakdown %}
+
+{# Topic navigation chips — always visible when a subject is focused #}
 <div class="card mb-3 shadow-sm">
-    <div class="card-header bg-light py-1">
-        <h6 class="mb-0 small"><i class="bi bi-bar-chart-line me-1"></i>{{ focus_subject.name }} — by topic / area</h6>
-        <small class="text-muted">Click an area to drill into its levels</small>
-    </div>
-    <div class="card-body p-2">
-        <div class="chart-box" style="position:relative; height:{% if area_breakdown|length > 10 %}420px{% elif area_breakdown|length > 5 %}300px{% else %}220px{% endif %};">
-            <canvas id="chartsAreaBar"></canvas>
-        </div>
-        <div class="mt-2 d-flex flex-wrap gap-1">
+    <div class="card-body py-2 px-3">
+        <div class="d-flex align-items-center flex-wrap gap-1">
+            <small class="text-muted me-2"><i class="bi bi-funnel me-1"></i>Topic:</small>
+            <a href="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}"
+               hx-get="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&partial=1"
+               hx-target="#progress-charts" hx-swap="innerHTML"
+               hx-push-url="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}"
+               class="badge text-decoration-none {% if not focus_area %}bg-primary{% else %}bg-light text-dark border{% endif %}">
+                All topics
+            </a>
             {% for a in area_breakdown %}
             <a href="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&area={{ a.area.pk }}"
                hx-get="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&area={{ a.area.pk }}&partial=1"
@@ -146,38 +155,8 @@
         </div>
     </div>
 </div>
-{% endif %}
-{% endif %}
 
-{# ── Topic + Level breakdown (when a subject is focused and any topic has levels) ── #}
-{% if focus_subject and not focus_area and topic_level_breakdown %}
-<div class="card mb-3 shadow-sm">
-    <div class="card-header bg-light py-1">
-        <h6 class="mb-0 small"><i class="bi bi-layers me-1"></i>{{ focus_subject.name }} — by topic &amp; level</h6>
-        <small class="text-muted">Click a topic to drill into its levels</small>
-    </div>
-    <div class="card-body p-2">
-        <div class="chart-box" style="position:relative; height:{% if topic_level_breakdown|length > 20 %}640px{% elif topic_level_breakdown|length > 12 %}460px{% elif topic_level_breakdown|length > 6 %}320px{% else %}220px{% endif %};">
-            <canvas id="chartsTopicLevelBar"></canvas>
-        </div>
-        {% if area_breakdown %}
-        <div class="mt-2 d-flex flex-wrap gap-1">
-            {% for a in area_breakdown %}
-            <a href="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&area={{ a.area.pk }}"
-               hx-get="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&area={{ a.area.pk }}&partial=1"
-               hx-target="#progress-charts" hx-swap="innerHTML"
-               hx-push-url="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&area={{ a.area.pk }}"
-               class="badge text-decoration-none {% if focus_area and focus_area.pk == a.area.pk %}bg-primary{% else %}bg-light text-dark border{% endif %}">
-                {{ a.area.name }}
-            </a>
-            {% endfor %}
-        </div>
-        {% endif %}
-    </div>
-</div>
-{% endif %}
-
-{# ── Level (sub-area) breakdown (when an area is in focus) ── #}
+{# Single chart card whose contents depend on focus state #}
 {% if focus_area and level_breakdown %}
 <div class="card mb-3 shadow-sm">
     <div class="card-header bg-light py-1">
@@ -189,6 +168,30 @@
         </div>
     </div>
 </div>
+{% elif topic_level_breakdown %}
+<div class="card mb-3 shadow-sm">
+    <div class="card-header bg-light py-1">
+        <h6 class="mb-0 small"><i class="bi bi-layers me-1"></i>{{ focus_subject.name }} — by topic &amp; level</h6>
+    </div>
+    <div class="card-body p-2">
+        <div class="chart-box" style="position:relative; height:{% if topic_level_breakdown|length > 20 %}640px{% elif topic_level_breakdown|length > 12 %}460px{% elif topic_level_breakdown|length > 6 %}320px{% else %}220px{% endif %};">
+            <canvas id="chartsTopicLevelBar"></canvas>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="card mb-3 shadow-sm">
+    <div class="card-header bg-light py-1">
+        <h6 class="mb-0 small"><i class="bi bi-bar-chart-line me-1"></i>{{ focus_subject.name }} — by topic</h6>
+    </div>
+    <div class="card-body p-2">
+        <div class="chart-box" style="position:relative; height:{% if area_breakdown|length > 10 %}420px{% elif area_breakdown|length > 5 %}300px{% else %}220px{% endif %};">
+            <canvas id="chartsAreaBar"></canvas>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% endif %}
 
 {# ── Term-over-term trend (% Secure) ── #}
