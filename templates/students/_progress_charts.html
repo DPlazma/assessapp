@@ -137,6 +137,20 @@
 </div>
 {% endif %}
 
+{# ── Topic + Level breakdown (when a subject is focused and any topic has levels) ── #}
+{% if focus_subject and not focus_area and topic_level_breakdown %}
+<div class="card mb-3 shadow-sm">
+    <div class="card-header bg-light py-1">
+        <h6 class="mb-0 small"><i class="bi bi-layers me-1"></i>{{ focus_subject.name }} — by topic &amp; level</h6>
+    </div>
+    <div class="card-body p-2">
+        <div class="chart-box" style="position:relative; height:{% if topic_level_breakdown|length > 20 %}640px{% elif topic_level_breakdown|length > 12 %}460px{% elif topic_level_breakdown|length > 6 %}320px{% else %}220px{% endif %};">
+            <canvas id="chartsTopicLevelBar"></canvas>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {# ── Level (sub-area) breakdown (when an area is in focus) ── #}
 {% if focus_area and level_breakdown %}
 <div class="card mb-3 shadow-sm">
@@ -178,6 +192,7 @@
 {{ subject_chart_data|json_script:"subject-breakdown-data" }}
 {% if area_chart_data %}{{ area_chart_data|json_script:"area-breakdown-data" }}{% endif %}
 {% if level_chart_data %}{{ level_chart_data|json_script:"level-breakdown-data" }}{% endif %}
+{% if topic_level_chart_data %}{{ topic_level_chart_data|json_script:"topic-level-breakdown-data" }}{% endif %}
 {% if trend_terms %}{{ trend_terms|json_script:"trend-terms-data" }}{{ trend_data|json_script:"trend-series-data" }}{% endif %}
 {{ overall_nya|json_script:"overall-nya" }}
 {{ overall_emerging|json_script:"overall-emerging" }}
@@ -310,6 +325,29 @@
                     { label: 'Emerging',     data: lvlData.map(l => l.emerging),   backgroundColor: RAG_COLOURS[1] },
                     { label: 'Developing',   data: lvlData.map(l => l.developing), backgroundColor: RAG_COLOURS[2] },
                     { label: 'Secure',       data: lvlData.map(l => l.secure),     backgroundColor: RAG_COLOURS[3] },
+                ]
+            },
+            options: {
+                indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                scales: { x: { stacked: true }, y: { stacked: true } },
+                plugins: { legend: { position: 'bottom' } },
+            }
+        });
+    }
+
+    const tlCanvas = document.getElementById('chartsTopicLevelBar');
+    const tlData = readJson('topic-level-breakdown-data');
+    if (tlCanvas && tlData) {
+        killChart(tlCanvas);
+        new Chart(tlCanvas, {
+            type: 'bar',
+            data: {
+                labels: tlData.map(l => l.name),
+                datasets: [
+                    { label: 'Not Assessed', data: tlData.map(l => l.not_yet),    backgroundColor: RAG_COLOURS[0] },
+                    { label: 'Emerging',     data: tlData.map(l => l.emerging),   backgroundColor: RAG_COLOURS[1] },
+                    { label: 'Developing',   data: tlData.map(l => l.developing), backgroundColor: RAG_COLOURS[2] },
+                    { label: 'Secure',       data: tlData.map(l => l.secure),     backgroundColor: RAG_COLOURS[3] },
                 ]
             },
             options: {

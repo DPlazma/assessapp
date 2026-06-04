@@ -562,6 +562,31 @@ def student_progress(request, pk):
                     "not_yet": counts["NYA"],
                 })
 
+        # ── Topic + Level breakdown for focus subject ──
+        # One row per (topic, level) combo, only for topics that have SubAreas defined.
+        # Hidden entirely when the focused subject has no levels at all.
+        topic_level_breakdown = []
+        if focus_subject and not focus_area:
+            for area in AssessmentArea.objects.filter(
+                subject=focus_subject
+            ).order_by("order", "name"):
+                sub_areas = list(SubArea.objects.filter(area=area).order_by("order", "name"))
+                if not sub_areas:
+                    continue
+                for sa in sub_areas:
+                    stmt_ids = sa.statements.values_list("pk", flat=True)
+                    counts, total = _counts_for(stmt_ids)
+                    if total == 0:
+                        continue
+                    topic_level_breakdown.append({
+                        "name": f"{area.name} — {sa.name}",
+                        "total": total,
+                        "secure": counts["SEC"],
+                        "developing": counts["DEV"],
+                        "emerging": counts["EME"],
+                        "not_yet": counts["NYA"],
+                    })
+
         # ── Overall totals: reflect focus (area > subject > everything) ──
         if focus_area:
             overall_total = sum(l["total"] for l in level_breakdown)
@@ -639,6 +664,17 @@ def student_progress(request, pk):
             }
             for it in level_breakdown
         ]
+        topic_level_chart_data = [
+            {
+                "name": it["name"],
+                "secure": it["secure"],
+                "developing": it["developing"],
+                "emerging": it["emerging"],
+                "not_yet": it["not_yet"],
+                "total": it["total"],
+            }
+            for it in topic_level_breakdown
+        ]
 
         # ── Termly snapshot table (unchanged) ──
         snapshots = (
@@ -667,6 +703,8 @@ def student_progress(request, pk):
             "subject_chart_data": subject_chart_data,
             "area_chart_data": area_chart_data,
             "level_chart_data": level_chart_data,
+            "topic_level_breakdown": topic_level_breakdown,
+            "topic_level_chart_data": topic_level_chart_data,
             "trend_terms": term_order,
             "trend_data": trend_data,
             "overall_total": overall_total,
