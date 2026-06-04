@@ -186,7 +186,17 @@
 
 <script>
 (function() {
-    if (typeof Chart === 'undefined') { return; }
+    const start = () => {
+        if (typeof Chart === 'undefined') {
+            // Chart.js may not be loaded yet on initial page load (it lives in extra_js).
+            return setTimeout(start, 50);
+        }
+        // Wait one frame so the browser has laid out the swapped content and
+        // parent containers have their real width — otherwise Chart.js can
+        // bake a huge backing-store and labels render gigantic.
+        requestAnimationFrame(init);
+    };
+    const init = () => {
     const RAG_COLOURS = ['#6c757d', '#dc3545', '#fd7e14', '#198754'];
     const RAG_LABELS  = ['Not Assessed', 'Emerging', 'Developing', 'Secure'];
     const readJson = (id) => {
@@ -343,5 +353,7 @@
             }
         });
     }
+    };
+    start();
 })();
 </script>
