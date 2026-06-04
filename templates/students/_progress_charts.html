@@ -6,17 +6,15 @@
 <div class="card mb-3 shadow-sm">
     <div class="card-body py-2 d-flex align-items-center flex-wrap gap-2">
         <span class="text-muted small"><i class="bi bi-funnel me-1"></i>Focus:</span>
-        <a href="{% url 'students:progress' student.pk %}?view=summary"
-           hx-get="{% url 'students:progress' student.pk %}?view=summary&partial=1"
-           hx-target="#progress-charts" hx-swap="innerHTML" hx-push-url="{% url 'students:progress' student.pk %}?view=summary"
+        <a href="{{ request.path }}"
+           {% if student %}hx-get="{{ request.path }}?partial=1" hx-target="#progress-charts" hx-swap="innerHTML" hx-push-url="{{ request.path }}"{% endif %}
            class="badge text-decoration-none {% if not focus_subject %}bg-primary{% else %}bg-light text-dark border{% endif %}">
             All subjects
         </a>
         {% if focus_subject %}
             <i class="bi bi-chevron-right text-muted small"></i>
-            <a href="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}"
-               hx-get="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&partial=1"
-               hx-target="#progress-charts" hx-swap="innerHTML" hx-push-url="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}"
+            <a href="{{ request.path }}?subject={{ focus_subject.pk }}"
+               {% if student %}hx-get="{{ request.path }}?subject={{ focus_subject.pk }}&partial=1" hx-target="#progress-charts" hx-swap="innerHTML" hx-push-url="{{ request.path }}?subject={{ focus_subject.pk }}"{% endif %}
                class="badge text-decoration-none {% if not focus_area %}bg-primary{% else %}bg-light text-dark border{% endif %}">
                 {{ focus_subject.name }}
             </a>
@@ -29,11 +27,7 @@
             <span class="htmx-indicator spinner-border spinner-border-sm text-muted" role="status"></span>
             <select class="form-select form-select-sm"
                     name="subject"
-                    hx-get="{% url 'students:progress' student.pk %}?view=summary&partial=1"
-                    hx-trigger="change"
-                    hx-target="#progress-charts" hx-swap="innerHTML"
-                    hx-push-url="true"
-                    hx-vals='js:{subject: event.target.value}'>
+                    {% if student %}hx-get="{{ request.path }}?partial=1" hx-trigger="change" hx-target="#progress-charts" hx-swap="innerHTML" hx-push-url="true" hx-vals='js:{subject: event.target.value}'{% else %}onchange="if(this.value){window.location.href='{{ request.path }}?subject='+this.value;}else{window.location.href='{{ request.path }}';}"{% endif %}>
                 <option value="">— Jump to subject —</option>
                 {% for subject in subjects %}
                 <option value="{{ subject.pk }}" {% if focus_subject and focus_subject.pk == subject.pk %}selected{% endif %}>
@@ -90,10 +84,8 @@
             {% for s in subject_summaries %}
             <div class="col-4 col-sm-3 col-md-2">
                 <div class="card h-100 border {% if focus_subject and focus_subject.pk == s.subject.pk %}border-primary{% endif %}">
-                    <a href="{% url 'students:progress' student.pk %}?view=summary&subject={{ s.subject.pk }}"
-                       hx-get="{% url 'students:progress' student.pk %}?view=summary&subject={{ s.subject.pk }}&partial=1"
-                       hx-target="#progress-charts" hx-swap="innerHTML"
-                       hx-push-url="{% url 'students:progress' student.pk %}?view=summary&subject={{ s.subject.pk }}"
+                    <a href="{{ request.path }}?subject={{ s.subject.pk }}"
+                       {% if student %}hx-get="{{ request.path }}?subject={{ s.subject.pk }}&partial=1" hx-target="#progress-charts" hx-swap="innerHTML" hx-push-url="{{ request.path }}?subject={{ s.subject.pk }}"{% endif %}
                        class="text-decoration-none text-dark d-block">
                         <div class="card-body p-1 text-center">
                             <div class="small text-truncate fw-bold" title="{{ s.subject.name }}" style="font-size:0.75rem;">{{ s.subject.name }}</div>
@@ -105,7 +97,7 @@
                             <div class="text-muted" style="font-size:0.7rem;">{{ s.total }} stmt{{ s.total|pluralize }}</div>
                         </div>
                     </a>
-                    {% if subject_permissions|get:s.subject.pk %}
+                    {% if student and subject_permissions|get:s.subject.pk %}
                     <a href="{% url 'assessments:assess_student' student.pk s.subject.pk %}"
                        class="btn btn-outline-primary btn-sm rounded-0 border-0 border-top py-1"
                        style="font-size:0.7rem;"
@@ -136,18 +128,14 @@ topics (or clear the area focus) without the chart shape changing.
     <div class="card-body py-2 px-3">
         <div class="d-flex align-items-center flex-wrap gap-1">
             <small class="text-muted me-2"><i class="bi bi-funnel me-1"></i>Topic:</small>
-            <a href="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}"
-               hx-get="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&partial=1"
-               hx-target="#progress-charts" hx-swap="innerHTML"
-               hx-push-url="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}"
+            <a href="{{ request.path }}?subject={{ focus_subject.pk }}"
+               {% if student %}hx-get="{{ request.path }}?subject={{ focus_subject.pk }}&partial=1" hx-target="#progress-charts" hx-swap="innerHTML" hx-push-url="{{ request.path }}?subject={{ focus_subject.pk }}"{% endif %}
                class="badge text-decoration-none {% if not focus_area %}bg-primary{% else %}bg-light text-dark border{% endif %}">
                 All topics
             </a>
             {% for a in area_breakdown %}
-            <a href="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&area={{ a.area.pk }}"
-               hx-get="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&area={{ a.area.pk }}&partial=1"
-               hx-target="#progress-charts" hx-swap="innerHTML"
-               hx-push-url="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&area={{ a.area.pk }}"
+            <a href="{{ request.path }}?subject={{ focus_subject.pk }}&area={{ a.area.pk }}"
+               {% if student %}hx-get="{{ request.path }}?subject={{ focus_subject.pk }}&area={{ a.area.pk }}&partial=1" hx-target="#progress-charts" hx-swap="innerHTML" hx-push-url="{{ request.path }}?subject={{ focus_subject.pk }}&area={{ a.area.pk }}"{% endif %}
                class="badge text-decoration-none {% if focus_area and focus_area.pk == a.area.pk %}bg-primary{% else %}bg-light text-dark border{% endif %}">
                 {{ a.area.name }}
             </a>

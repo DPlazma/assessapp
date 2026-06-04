@@ -1454,13 +1454,7 @@ def _cp_date_range(request):
         except (AcademicYear.DoesNotExist, ValueError):
             pass
 
-    if request.GET.get("show") == "all":
-        return None, None, "All time"
-
-    # Default: current term
-    current = Term.get_current()
-    if current:
-        return current.start_date, current.end_date, str(current)
+    # Default: all time (no date filtering)
     return None, None, "All time"
 
 
@@ -1637,6 +1631,223 @@ def _cp_build_data(request, class_group, date_from=None, date_to=None):
     }
 
 
+def _cp_chart_context(request, class_group, data):
+    """Build the chart-partial context (subject/area/level breakdowns + trend) for a class.
+
+    Mirrors students.views.student_progress so the partial templates/students/_progress_charts.html
+    can render for an entire class with one line per student on the trend chart.
+    """
+    students = data["students"]
+    student_ids = [s.pk for s in students]
+
+    assigned_fw_ids = set(
+        FrameworkAssignment.objects.filter(
+            class_group=class_group, framework__is_active=True
+        ).values_list("framework_id", flat=True)
+    )
+
+    # Subjects available for this class
+    if assigned_fw_ids:
+        subjects = list(
+            Subject.objects.filter(
+                pk__in=AssessmentArea.objects.filter(
+                    framework_id__in=assigned_fw_ids
+                ).values_list("subject_id", flat=True).distinct()
+            ).order_by("name")
+        )
+    else:
+        subjects = list(data["subjects"])
+
+    # Resolve focus
+    focus_subject = None
+    focus_area = None
+    subj_id = request.GET.get("subject")
+    if subj_id:
+        try:
+            focus_subject = Subject.objects.get(pk=int(subj_id))
+        except (Subject.DoesNotExist, ValueError):
+            focus_subject = None
+    area_id = request.GET.get("area")
+    if area_id and focus_subject:
+        try:
+            focus_area = AssessmentArea.objects.get(pk=int(area_id), subject=focus_subject)
+        except (AssessmentArea.DoesNotExist, ValueError):
+            focus_area = None
+
+    def _latest_map(statement_ids):
+        ids = list(statement_ids)
+        if not student_ids or not ids:
+            return {}
+        latest = {}
+        for r in (
+            AssessmentRecord.objects
+            .filter(student_id__in=student_ids, statement_id__in=ids)
+            .order_by("-assessed_date", "-id")
+            .values("student_id", "statement_id", "status")
+        ):
+            k = (r["student_id"], r["statement_id"])
+            if k not in latest:
+                latest[k] = r["status"]
+        return latest
+
+    def _counts_for(statement_ids):
+        ids = list(statement_ids)
+        latest = _latest_map(ids)
+        counts = {"SEC": 0, "DEV": 0, "EME": 0, "NYA": 0}
+        for sid in ids:
+            for stu_id in student_ids:
+                counts[latest.get((stu_id, sid), "NYA")] += 1
+        total = len(ids) * len(student_ids)
+        return counts, total
+
+    def _area_qs(subject):
+        qs = AssessmentArea.objects.filter(subject=subject)
+        if assigned_fw_ids:
+            qs = qs.filter(framework_id__in=assigned_fw_ids)
+        return qs.order_by("name")
+
+    # Per-subject summary
+    subject_summaries = []
+    for subj in subjects:
+        stmt_qs = AssessmentStatement.objects.filter(area__subject=subj)
+        if assigned_fw_ids:
+            stmt_qs = stmt_qs.filter(area__framework_id__in=assigned_fw_ids)
+        counts, total = _counts_for(stmt_qs.values_list("pk", flat=True))
+        subject_summaries.append({
+            "subject": subj, "total": total,
+            "secure": counts["SEC"], "developing": counts["DEV"],
+            "emerging": counts["EME"], "not_yet": counts["NYA"],
+        })
+
+    # Area breakdown
+    area_breakdown = []
+    if focus_subject:
+        for area in _area_qs(focus_subject):
+            counts, total = _counts_for(area.statements.values_list("pk", flat=True))
+            area_breakdown.append({
+                "area": area, "total": total,
+                "secure": counts["SEC"], "developing": counts["DEV"],
+                "emerging": counts["EME"], "not_yet": counts["NYA"],
+            })
+
+    # Level breakdown (focus area)
+    level_breakdown = []
+    if focus_area:
+        sub_areas = list(SubArea.objects.filter(area=focus_area).order_by("name"))
+        groups = [(sa.name, list(sa.statements.values_list("pk", flat=True))) for sa in sub_areas]
+        unsorted_ids = list(
+            focus_area.statements.filter(sub_area__isnull=True).values_list("pk", flat=True)
+        )
+        if unsorted_ids:
+            groups.append(("(no level)", unsorted_ids))
+        for name, ids in groups:
+            counts, total = _counts_for(ids)
+            if total == 0:
+                continue
+            level_breakdown.append({
+                "name": name, "total": total,
+                "secure": counts["SEC"], "developing": counts["DEV"],
+                "emerging": counts["EME"], "not_yet": counts["NYA"],
+            })
+
+    # Topic + level breakdown (focus subject, no focus area)
+    topic_level_breakdown = []
+    if focus_subject and not focus_area:
+        for area in _area_qs(focus_subject):
+            sub_areas = list(SubArea.objects.filter(area=area).order_by("name"))
+            for sa in sub_areas:
+                counts, total = _counts_for(sa.statements.values_list("pk", flat=True))
+                if total == 0:
+                    continue
+                topic_level_breakdown.append({
+                    "name": f"{area.name} — {sa.name}",
+                    "total": total,
+                    "secure": counts["SEC"], "developing": counts["DEV"],
+                    "emerging": counts["EME"], "not_yet": counts["NYA"],
+                })
+
+    # Overall totals, focus-aware
+    if focus_area:
+        src = level_breakdown
+    elif focus_subject:
+        src = area_breakdown
+    else:
+        src = subject_summaries
+    overall_total = sum(x["total"] for x in src)
+    overall_secure = sum(x["secure"] for x in src)
+    overall_developing = sum(x["developing"] for x in src)
+    overall_emerging = sum(x["emerging"] for x in src)
+    overall_nya = sum(x["not_yet"] for x in src)
+
+    # Trend — one series per student (% Secure by term)
+    snap_qs = AssessmentSnapshot.objects.filter(student_id__in=student_ids)
+    if focus_area:
+        snap_qs = snap_qs.filter(area=focus_area)
+    elif focus_subject:
+        snap_qs = snap_qs.filter(area__subject=focus_subject)
+    snap_qs = snap_qs.select_related("term__academic_year", "student").order_by(
+        "term__academic_year__start_date", "term__start_date"
+    )
+    term_order = []
+    trend_map = {}
+    for snap in snap_qs:
+        term_label = str(snap.term)
+        if term_label not in term_order:
+            term_order.append(term_label)
+        name = snap.student.full_name
+        bucket = trend_map.setdefault(name, {})
+        agg = bucket.setdefault(term_label, {"sec": 0, "total": 0})
+        agg["sec"] += snap.secure_count
+        agg["total"] += snap.total_statements
+    trend_data = {
+        name: [
+            round((bucket[t]["sec"] / bucket[t]["total"]) * 100, 1)
+            if t in bucket and bucket[t]["total"] else None
+            for t in term_order
+        ]
+        for name, bucket in trend_map.items()
+    }
+
+    # JSON shapes for the partial
+    def _to_chart(items, key):
+        return [{
+            "name": getattr(it[key], "name", str(it[key])),
+            "id": getattr(it[key], "pk", None),
+            "secure": it["secure"], "developing": it["developing"],
+            "emerging": it["emerging"], "not_yet": it["not_yet"], "total": it["total"],
+        } for it in items]
+
+    def _to_chart_named(items):
+        return [{
+            "name": it["name"],
+            "secure": it["secure"], "developing": it["developing"],
+            "emerging": it["emerging"], "not_yet": it["not_yet"], "total": it["total"],
+        } for it in items]
+
+    return {
+        # Override the subjects queryset from _cp_build_data with the focus-friendly list
+        "subjects": subjects,
+        "subject_summaries": subject_summaries,
+        "subject_permissions": {},
+        "focus_subject": focus_subject,
+        "focus_area": focus_area,
+        "area_breakdown": area_breakdown,
+        "level_breakdown": level_breakdown,
+        "topic_level_breakdown": topic_level_breakdown,
+        "subject_chart_data": _to_chart(subject_summaries, "subject"),
+        "area_chart_data": _to_chart(area_breakdown, "area") if area_breakdown else [],
+        "level_chart_data": _to_chart_named(level_breakdown),
+        "topic_level_chart_data": _to_chart_named(topic_level_breakdown),
+        "trend_terms": term_order,
+        "trend_data": trend_data,
+        "overall_total": overall_total,
+        "overall_secure": overall_secure,
+        "overall_developing": overall_developing,
+        "overall_emerging": overall_emerging,
+        "overall_nya": overall_nya,
+    }
+
+
 @login_required
 def class_progress(request, class_id):
     """Show assessment progress for all students in a class, broken down by subject/area."""
@@ -1659,6 +1870,8 @@ def class_progress(request, class_id):
         except (Term.DoesNotExist, ValueError):
             pass
 
+    chart_ctx = _cp_chart_context(request, class_group, data)
+
     context = {
         "class_group": class_group,
         "view_mode": view_mode,
@@ -1673,7 +1886,11 @@ def class_progress(request, class_id):
         "compare_data": compare_data,
         "compare_label": compare_label,
         **data,
+        **chart_ctx,
     }
+
+    if request.GET.get("partial") == "1" or request.headers.get("HX-Request"):
+        return render(request, "students/_progress_charts.html", context)
     return render(request, "assessments/class_progress.html", context)
 
 

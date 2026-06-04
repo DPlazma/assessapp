@@ -188,18 +188,11 @@
     @media (max-width: 992px) { .comparison-grid { grid-template-columns: 1fr; } }
 </style>
 
-{# ── CHART ─────────────────────────────────────────────────────── #}
-{% if view_mode != "table" and chart_data_json != "{}" %}
-<div class="card mb-4">
-    <div class="card-header bg-light">
-        <strong><i class="bi bi-graph-up me-1"></i>Student Progress Over Time</strong>
-        <span class="text-muted small ms-2">{{ period_label }}</span>
-    </div>
-    <div class="card-body">
-        <div style="position: relative; height: 350px;">
-            <canvas id="classProgressChart"></canvas>
-        </div>
-    </div>
+{# ── CHART (shared partial — same shape as the student progress page) ── #}
+{% if view_mode != "table" %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<div id="progress-charts">
+    {% include "students/_progress_charts.html" %}
 </div>
 {% endif %}
 
@@ -372,100 +365,6 @@
     <p class="mt-2">No assessment areas found for this class. Assign a framework first.</p>
 </div>
 {% endfor %}
-{% endif %}
-
-{# ── CHART.JS ─────────────────────────────────────────────────── #}
-{% if view_mode != "table" and chart_data_json != "{}" %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const chartData = JSON.parse('{{ chart_data_json|escapejs }}');
-    const statusLabels = {0: 'NYA', 1: 'Emerging', 2: 'Developing', 3: 'Secure'};
-    const colours = [
-        '#0d6efd','#198754','#fd7e14','#dc3545','#6f42c1','#20c997',
-        '#d63384','#ffc107','#0dcaf0','#6610f2','#e91e63','#795548',
-        '#607d8b','#8bc34a','#ff5722','#3f51b5','#009688','#cddc39',
-    ];
-
-    function formatDate(iso) { const [y,m,d] = iso.split('-'); return d+'-'+m+'-'+y; }
-
-    const datasets = [];
-    const allDates = new Set();
-    let colIdx = 0;
-
-    for (const [studentName, points] of Object.entries(chartData)) {
-        points.forEach(p => allDates.add(p.date));
-        datasets.push({
-            label: studentName,
-            data: points.map(p => ({
-                x: p.date, y: p.avg,
-                count: p.count, day: p.day,
-                sec: p.sec, dev: p.dev, eme: p.eme, nya: p.nya,
-            })),
-            borderColor: colours[colIdx % colours.length],
-            backgroundColor: colours[colIdx % colours.length],
-            tension: 0.3,
-            fill: false,
-            borderWidth: 2,
-            pointRadius: 3,
-        });
-        colIdx++;
-    }
-
-    new Chart(document.getElementById('classProgressChart'), {
-        type: 'line',
-        data: { datasets },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    type: 'category',
-                    labels: [...allDates].sort(),
-                    title: { display: true, text: 'Date' },
-                    ticks: { callback: function(value) { return formatDate(this.getLabelForValue(value)); } },
-                },
-                y: {
-                    min: 0, max: 3,
-                    ticks: {
-                        stepSize: 1,
-                        callback: function(value) { return statusLabels[value] || ''; },
-                    },
-                    title: { display: true, text: 'Cumulative Average Status' },
-                },
-            },
-            plugins: {
-                tooltip: {
-                    displayColors: true,
-                    callbacks: {
-                        title: function(items) {
-                            return formatDate(items[0].raw.x);
-                        },
-                        label: function(ctx) {
-                            const p = ctx.raw;
-                            const closest = Math.round(p.y);
-                            return ctx.dataset.label + ': ' + statusLabels[closest] + ' (' + p.y.toFixed(2) + ')';
-                        },
-                        afterLabel: function(ctx) {
-                            const p = ctx.raw;
-                            const lines = [];
-                            lines.push('Based on ' + p.count + ' assessment' + (p.count !== 1 ? 's' : '') + ' to date');
-                            lines.push('  NYA: ' + p.nya + '  Emerging: ' + p.eme);
-                            lines.push('  Developing: ' + p.dev + '  Secure: ' + p.sec);
-                            lines.push(p.day + ' recorded on this date');
-                            return lines;
-                        },
-                    },
-                },
-                legend: {
-                    position: 'bottom',
-                    labels: { boxWidth: 12, padding: 10, font: { size: 11 } },
-                },
-            },
-        },
-    });
-});
-</script>
 {% endif %}
 
 {# ── FILTER FORM JS ───────────────────────────────────────────── #}
