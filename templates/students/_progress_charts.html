@@ -122,6 +122,8 @@
 
 {# ── Area breakdown (when a subject is in focus) ── #}
 {% if focus_subject and area_breakdown %}
+{# Hide the topic-only chart when the topic+level chart will render below — they'd be redundant. #}
+{% if not topic_level_breakdown %}
 <div class="card mb-3 shadow-sm">
     <div class="card-header bg-light py-1">
         <h6 class="mb-0 small"><i class="bi bi-bar-chart-line me-1"></i>{{ focus_subject.name }} — by topic / area</h6>
@@ -145,17 +147,32 @@
     </div>
 </div>
 {% endif %}
+{% endif %}
 
 {# ── Topic + Level breakdown (when a subject is focused and any topic has levels) ── #}
 {% if focus_subject and not focus_area and topic_level_breakdown %}
 <div class="card mb-3 shadow-sm">
     <div class="card-header bg-light py-1">
         <h6 class="mb-0 small"><i class="bi bi-layers me-1"></i>{{ focus_subject.name }} — by topic &amp; level</h6>
+        <small class="text-muted">Click a topic to drill into its levels</small>
     </div>
     <div class="card-body p-2">
         <div class="chart-box" style="position:relative; height:{% if topic_level_breakdown|length > 20 %}640px{% elif topic_level_breakdown|length > 12 %}460px{% elif topic_level_breakdown|length > 6 %}320px{% else %}220px{% endif %};">
             <canvas id="chartsTopicLevelBar"></canvas>
         </div>
+        {% if area_breakdown %}
+        <div class="mt-2 d-flex flex-wrap gap-1">
+            {% for a in area_breakdown %}
+            <a href="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&area={{ a.area.pk }}"
+               hx-get="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&area={{ a.area.pk }}&partial=1"
+               hx-target="#progress-charts" hx-swap="innerHTML"
+               hx-push-url="{% url 'students:progress' student.pk %}?view=summary&subject={{ focus_subject.pk }}&area={{ a.area.pk }}"
+               class="badge text-decoration-none {% if focus_area and focus_area.pk == a.area.pk %}bg-primary{% else %}bg-light text-dark border{% endif %}">
+                {{ a.area.name }}
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endif %}
