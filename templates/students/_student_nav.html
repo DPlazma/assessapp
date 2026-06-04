@@ -1,7 +1,7 @@
 {% comment %}
 Shared student profile header + tabs.
-Use: include "students/_student_nav.html" with active_tab="overview"
-Values: overview | subjects | progress | ehcp | evidence
+Use: include "students/_student_nav.html" with active_tab="progress"
+Values: progress | evidence | ehcp
 {% endcomment %}
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body py-3">
@@ -32,33 +32,21 @@ Values: overview | subjects | progress | ehcp | evidence
     </div>
     <ul class="nav nav-tabs px-3 border-bottom-0" style="margin-bottom:-1px;">
         <li class="nav-item">
-            <a class="nav-link py-2{% if active_tab == 'overview' %} active{% endif %}"
-               href="{% url 'students:detail' student.pk %}">
-                <i class="bi bi-grid-1x2 me-1"></i>Overview
-            </a>
-        </li>
-        <li class="nav-item">
-            <a class="nav-link py-2{% if active_tab == 'subjects' %} active{% endif %}"
-               href="{% url 'assessments:student_subjects' student.pk %}">
-                <i class="bi bi-pencil-square me-1"></i>Subjects
-            </a>
-        </li>
-        <li class="nav-item">
             <a class="nav-link py-2{% if active_tab == 'progress' %} active{% endif %}"
                href="{% url 'students:progress' student.pk %}">
                 <i class="bi bi-graph-up me-1"></i>Progress
             </a>
         </li>
         <li class="nav-item">
-            <a class="nav-link py-2{% if active_tab == 'ehcp' %} active{% endif %}"
-               href="{% url 'evidence:ehcp_overview' student.pk %}">
-                <i class="bi bi-bullseye me-1"></i>EHCP
-            </a>
-        </li>
-        <li class="nav-item">
             <a class="nav-link py-2{% if active_tab == 'evidence' %} active{% endif %}"
                href="{% url 'evidence:evidence_gallery' student.pk %}">
                 <i class="bi bi-images me-1"></i>Evidence
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link py-2{% if active_tab == 'ehcp' %} active{% endif %}"
+               href="{% url 'evidence:ehcp_overview' student.pk %}">
+                <i class="bi bi-bullseye me-1"></i>EHCP
             </a>
         </li>
     </ul>

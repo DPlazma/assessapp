@@ -31,26 +31,8 @@
 </style>
 
 {# ── View Toggle Tabs ────────────────────────────────────────────── #}
-<ul class="nav nav-tabs mb-3">
-    <li class="nav-item">
-        <a class="nav-link {% if active_view == 'summary' %}active{% endif %}"
-           href="{% url 'students:progress' student.pk %}?view=summary">
-            <i class="bi bi-journal-text me-1"></i>Summary
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link {% if active_view == 'assessments' %}active{% endif %}"
-           href="{% url 'students:progress' student.pk %}?view=assessments{% if selected_term %}&term={{ selected_term }}{% elif active_period == 'all time' %}&show=all{% endif %}">
-            <i class="bi bi-journal-check me-1"></i>Assessments
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link {% if active_view == 'ehcp' %}active{% endif %}"
-           href="{% url 'students:progress' student.pk %}?view=ehcp{% if selected_term %}&term={{ selected_term }}{% elif active_period == 'all time' %}&show=all{% endif %}">
-            <i class="bi bi-clipboard2-pulse me-1"></i>EHCP Targets
-        </a>
-    </li>
-</ul>
+{# Sub-tabs removed: the Progress page is single-pane (Summary). #}
+{# Legacy ?view=assessments and ?view=ehcp URLs still work but aren't linked from the nav. #}
 
 {% if active_view == "summary" %}
 {# ══════════════════════════════════════════════════════════════════ #}

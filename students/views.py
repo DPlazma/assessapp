@@ -34,7 +34,7 @@ def student_progress(request, pk):
     from collections import OrderedDict
     from evidence.models import EHCPTarget, EHCPTargetReview
 
-    active_view = request.GET.get("view", "assessments")  # "assessments" or "ehcp"
+    active_view = request.GET.get("view", "summary")  # default: summary; "assessments"/"ehcp" still reachable via querystring
 
     # ── Shared date filtering ────────────────────────────────────────
     date_from = None
@@ -103,10 +103,17 @@ def student_progress(request, pk):
         .order_by("order", "name")
     )
 
+    # Per-subject "can record assessments?" map for the subject grid buttons.
+    from assessments.views import _can_assess_student
+    subject_permissions = {
+        s.pk: _can_assess_student(request.user, student, s) for s in subjects
+    }
+
     context = {
         "student": student,
         "active_view": active_view,
         "subjects": subjects,
+        "subject_permissions": subject_permissions,
         "academic_years": AcademicYear.objects.all(),
         "terms": Term.objects.select_related("academic_year").all(),
         "selected_academic_year": request.GET.get("academic_year", ""),

@@ -35,32 +35,15 @@ def _can_assess_student_class(user, student):
 def student_landing_url(user, student, subject=None):
     """Return the URL a given user should land on when opening this student.
 
-    If `subject` is provided, the Assess destination is the subject-specific
-    Assess page; otherwise the student subjects hub. Progress is the fallback
-    when a Subject/Pathway Lead is not teaching the student's class.
+    If `subject` is provided, go straight to the subject-specific Assess page.
+    Otherwise, everyone lands on the student's Progress page — the consolidated
+    hub with the per-subject grid and Record buttons. The old per-role split
+    (assess hub vs progress) has been retired.
     """
 
-    def _assess_url():
-        if subject is not None:
-            subj_pk = getattr(subject, "pk", subject)
-            return reverse(
-                "assessments:assess_student", args=[student.pk, subj_pk]
-            )
-        return reverse("assessments:student_subjects", args=[student.pk])
-
-    if not user or not getattr(user, "is_authenticated", False):
-        return _assess_url()
-
-    profile = getattr(user, "staffprofile", None)
-    role = getattr(profile, "role", None) if profile else None
-
-    # Rule only applies to subject leads and pathway leads.
-    if role not in ("subject_lead", "pathway_lead"):
-        return _assess_url()
-
-    if _can_assess_student_class(user, student):
-        return _assess_url()
-
+    if subject is not None:
+        subj_pk = getattr(subject, "pk", subject)
+        return reverse("assessments:assess_student", args=[student.pk, subj_pk])
     return reverse("students:progress", args=[student.pk])
 
 

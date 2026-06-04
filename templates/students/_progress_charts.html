@@ -1,5 +1,6 @@
 {# Partial: focus switcher + chart cards. Used full-page and as HTMX swap target. #}
 {# Container with id="progress-charts" is in the parent template; this is the swap contents. #}
+{% load assess_tags %}
 
 {# ── Focus breadcrumb / context switcher ── #}
 <div class="card mb-3 shadow-sm">
@@ -88,12 +89,12 @@
         <div class="row g-2">
             {% for s in subject_summaries %}
             <div class="col-4 col-sm-3 col-md-2">
-                <a href="{% url 'students:progress' student.pk %}?view=summary&subject={{ s.subject.pk }}"
-                   hx-get="{% url 'students:progress' student.pk %}?view=summary&subject={{ s.subject.pk }}&partial=1"
-                   hx-target="#progress-charts" hx-swap="innerHTML"
-                   hx-push-url="{% url 'students:progress' student.pk %}?view=summary&subject={{ s.subject.pk }}"
-                   class="text-decoration-none text-dark">
-                    <div class="card h-100 border {% if focus_subject and focus_subject.pk == s.subject.pk %}border-primary{% endif %}">
+                <div class="card h-100 border {% if focus_subject and focus_subject.pk == s.subject.pk %}border-primary{% endif %}">
+                    <a href="{% url 'students:progress' student.pk %}?view=summary&subject={{ s.subject.pk }}"
+                       hx-get="{% url 'students:progress' student.pk %}?view=summary&subject={{ s.subject.pk }}&partial=1"
+                       hx-target="#progress-charts" hx-swap="innerHTML"
+                       hx-push-url="{% url 'students:progress' student.pk %}?view=summary&subject={{ s.subject.pk }}"
+                       class="text-decoration-none text-dark d-block">
                         <div class="card-body p-1 text-center">
                             <div class="small text-truncate fw-bold" title="{{ s.subject.name }}" style="font-size:0.75rem;">{{ s.subject.name }}</div>
                             <div class="chart-box mx-auto" style="position:relative; height:80px; width:80px;">
@@ -103,8 +104,16 @@
                             </div>
                             <div class="text-muted" style="font-size:0.7rem;">{{ s.total }} stmt{{ s.total|pluralize }}</div>
                         </div>
-                    </div>
-                </a>
+                    </a>
+                    {% if subject_permissions|get:s.subject.pk %}
+                    <a href="{% url 'assessments:assess_student' student.pk s.subject.pk %}"
+                       class="btn btn-outline-primary btn-sm rounded-0 border-0 border-top py-1"
+                       style="font-size:0.7rem;"
+                       title="Record assessments for {{ s.subject.name }}">
+                        <i class="bi bi-pencil-square me-1"></i>Record
+                    </a>
+                    {% endif %}
+                </div>
             </div>
             {% endfor %}
         </div>
