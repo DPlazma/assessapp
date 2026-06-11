@@ -72,15 +72,33 @@ DEFAULT_ENGLISH_SHEETS = [
 
 
 DEFAULT_MATHS_SHEETS = [
-    "Topic 0 - Futures",
-    "Topic 0 - Preparations",
-    "Topic 1 - Futures ",
-    "Topic 1 - Preparations",
-    "Topic 2 - Futures",
-    "Topic 2 - Preparations",
-    "Topic 3 - Futures",
-    "Topic 3 - Preparations",
-    "Entry Level",
+    ("Topic 0 - Futures", "Maths Topic 0 - Entry and Foundations"),
+    ("Topic 0 - Preparations", "Maths Topic 0 - Entry and Foundations"),
+    (
+        "Topic 1 - Futures ",
+        "Maths Topic 1 - Using Numbers and the Number System - Whole Numbers, Fractions and Decimals",
+    ),
+    (
+        "Topic 1 - Preparations",
+        "Maths Topic 1 - Using Numbers and the Number System - Whole Numbers, Fractions and Decimals",
+    ),
+    (
+        "Topic 2 - Futures",
+        "Maths Topic 2 - Using Common Measures, Shape and Space",
+    ),
+    (
+        "Topic 2 - Preparations",
+        "Maths Topic 2 - Using Common Measures, Shape and Space",
+    ),
+    (
+        "Topic 3 - Futures",
+        "Maths Topic 3 - Handling Data and Information",
+    ),
+    (
+        "Topic 3 - Preparations",
+        "Maths Topic 3 - Handling Data and Information",
+    ),
+    ("Entry Level", "Maths Entry Level"),
 ]
 
 
@@ -208,8 +226,8 @@ class Command(BaseCommand):
         jobs = []
         for sheet_name in DEFAULT_ENGLISH_SHEETS:
             jobs.append((english_path, sheet_name, english_subject, sheet_name))
-        for sheet_name in DEFAULT_MATHS_SHEETS:
-            jobs.append((maths_path, sheet_name, maths_subject, sheet_name))
+        for sheet_name, area_name in DEFAULT_MATHS_SHEETS:
+            jobs.append((maths_path, sheet_name, maths_subject, area_name))
 
         summary = {
             "sheets_processed": 0,
