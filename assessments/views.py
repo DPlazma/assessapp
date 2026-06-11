@@ -1518,6 +1518,69 @@ def _cp_build_data(request, class_group, date_from=None, date_to=None):
     if date_to:
         rec_qs = rec_qs.filter(assessed_date__lte=date_to)
 
+    # Infer per-student, per-subject working level from highest non-NYA level.
+    student_subject_floor = {
+        (row["student_id"], row["statement__area__subject_id"]): row["max_order"]
+        for row in (
+            rec_qs.filter(
+                statement__sub_area__isnull=False,
+                status__in=("EME", "DEV", "SEC"),
+            )
+            .values("student_id", "statement__area__subject_id")
+            .annotate(max_order=models.Max("statement__sub_area__order"))
+        )
+        if row["max_order"] is not None
+    }
+
+    student_area_floor = {
+        (row["student_id"], row["statement__area_id"]): row["max_order"]
+        for row in (
+            rec_qs.filter(
+                statement__sub_area__isnull=False,
+                status__in=("EME", "DEV", "SEC"),
+            )
+            .values("student_id", "statement__area_id")
+            .annotate(max_order=models.Max("statement__sub_area__order"))
+        )
+        if row["max_order"] is not None
+    }
+
+    area_level_labels = {
+        (area_id, order): name
+        for area_id, order, name in SubArea.objects.filter(area__in=areas)
+        .values_list("area_id", "order", "name")
+    }
+
+    statement_meta = {
+        sid: (subject_id, area_id, sub_order)
+        for sid, subject_id, sub_order in AssessmentStatement.objects.filter(
+            area__in=areas
+        ).values_list("pk", "area__subject_id", "area_id", "sub_area__order")
+    }
+
+    def _statement_visible_for_student(student_id, statement_id):
+        subject_id, _area_id, sub_order = statement_meta.get(
+            statement_id, (None, None, None)
+        )
+        floor = student_subject_floor.get((student_id, subject_id))
+        if floor is None:
+            return True
+        return sub_order is not None and sub_order == floor
+
+    def _build_row_payload(student, level_label, counts, total, extra_levels=None, collapse_id=""):
+        return {
+            "student": student,
+            "level_label": level_label,
+            "counts": counts,
+            "total": total,
+            "pct_secure": round(counts["SEC"] / total * 100) if total else 0,
+            "pct_developing": round(counts["DEV"] / total * 100) if total else 0,
+            "pct_emerging": round(counts["EME"] / total * 100) if total else 0,
+            "pct_nya": round(counts["NYA"] / total * 100) if total else 0,
+            "extra_levels": extra_levels or [],
+            "collapse_id": collapse_id,
+        }
+
     latest_records = (
         rec_qs.values("student_id", "statement_id")
         .annotate(latest_id=models.Max("id"))
@@ -1536,26 +1599,108 @@ def _cp_build_data(request, class_group, date_from=None, date_to=None):
         stmt_ids = [s.pk for s in area.statements.all()]
         if not stmt_ids:
             continue
+        has_levels = SubArea.objects.filter(area=area).exists()
+        area_level_orders = list(
+            SubArea.objects.filter(area=area)
+            .order_by("order", "name")
+            .values_list("order", flat=True)
+        )
+        level_stmt_ids = {}
+        for sid in stmt_ids:
+            _subject_id, area_id, sub_order = statement_meta.get(sid, (None, None, None))
+            if area_id != area.pk or sub_order is None:
+                continue
+            level_stmt_ids.setdefault(sub_order, []).append(sid)
+
         student_rows = []
         area_totals = {"SEC": 0, "DEV": 0, "EME": 0, "NYA": 0, "total": 0}
         for student in students:
-            counts = {"SEC": 0, "DEV": 0, "EME": 0, "NYA": 0}
-            for sid in stmt_ids:
-                st = status_lookup.get((student.pk, sid), "NYA")
-                counts[st] += 1
-            total = len(stmt_ids)
-            student_rows.append({
-                "student": student,
-                "counts": counts,
-                "total": total,
-                "pct_secure": round(counts["SEC"] / total * 100) if total else 0,
-                "pct_developing": round(counts["DEV"] / total * 100) if total else 0,
-                "pct_emerging": round(counts["EME"] / total * 100) if total else 0,
-                "pct_nya": round(counts["NYA"] / total * 100) if total else 0,
-            })
-            for k in counts:
-                area_totals[k] += counts[k]
-            area_totals["total"] += total
+            if has_levels:
+                per_level_rows = []
+                for order in area_level_orders:
+                    sids = level_stmt_ids.get(order, [])
+                    if not sids:
+                        continue
+                    level_counts = {"SEC": 0, "DEV": 0, "EME": 0, "NYA": 0}
+                    for sid in sids:
+                        st = status_lookup.get((student.pk, sid), "NYA")
+                        level_counts[st] += 1
+
+                    # For level-based areas, suppress raw NYA volume in class tables.
+                    level_counts["NYA"] = 0
+                    level_total = level_counts["SEC"] + level_counts["DEV"] + level_counts["EME"]
+
+                    if level_total > 0:
+                        per_level_rows.append({
+                            "order": order,
+                            "level_label": area_level_labels.get((area.pk, order)),
+                            "counts": level_counts,
+                            "total": level_total,
+                            "pct_secure": round(level_counts["SEC"] / level_total * 100) if level_total else 0,
+                            "pct_developing": round(level_counts["DEV"] / level_total * 100) if level_total else 0,
+                            "pct_emerging": round(level_counts["EME"] / level_total * 100) if level_total else 0,
+                            "pct_nya": 0,
+                        })
+
+                if per_level_rows:
+                    area_floor = student_area_floor.get((student.pk, area.pk))
+                    if area_floor is None:
+                        area_floor = max(r["order"] for r in per_level_rows)
+
+                    primary = next(
+                        (r for r in per_level_rows if r["order"] == area_floor),
+                        max(per_level_rows, key=lambda r: r["order"]),
+                    )
+                    extras = [r for r in per_level_rows if r["order"] != primary["order"]]
+                    extras.sort(key=lambda r: r["order"], reverse=True)
+
+                    student_rows.append(
+                        _build_row_payload(
+                            student=student,
+                            level_label=primary["level_label"],
+                            counts=primary["counts"],
+                            total=primary["total"],
+                            extra_levels=extras,
+                            collapse_id=f"area-{area.pk}-student-{student.pk}-levels",
+                        )
+                    )
+
+                    for k in primary["counts"]:
+                        area_totals[k] += primary["counts"][k]
+                    area_totals["total"] += primary["total"]
+                else:
+                    counts = {"SEC": 0, "DEV": 0, "EME": 0, "NYA": 0}
+                    student_rows.append(
+                        _build_row_payload(
+                            student=student,
+                            level_label=None,
+                            counts=counts,
+                            total=0,
+                        )
+                    )
+            else:
+                counts = {"SEC": 0, "DEV": 0, "EME": 0, "NYA": 0}
+                visible_stmt_ids = [
+                    sid for sid in stmt_ids
+                    if _statement_visible_for_student(student.pk, sid)
+                ]
+                for sid in visible_stmt_ids:
+                    st = status_lookup.get((student.pk, sid), "NYA")
+                    counts[st] += 1
+                total = len(visible_stmt_ids)
+
+                student_rows.append(
+                    _build_row_payload(
+                        student=student,
+                        level_label=None,
+                        counts=counts,
+                        total=total,
+                    )
+                )
+                for k in counts:
+                    area_totals[k] += counts[k]
+                area_totals["total"] += total
+
         at = area_totals["total"] or 1
         area_data.append({
             "area": area,
@@ -1674,6 +1819,35 @@ def _cp_chart_context(request, class_group, data):
         except (AssessmentArea.DoesNotExist, ValueError):
             focus_area = None
 
+    # Infer per-student, per-subject working level for class charts/tables.
+    floor_qs = AssessmentRecord.objects.filter(student_id__in=student_ids)
+    student_subject_floor = {
+        (row["student_id"], row["statement__area__subject_id"]): row["max_order"]
+        for row in (
+            floor_qs.filter(
+                statement__sub_area__isnull=False,
+                status__in=("EME", "DEV", "SEC"),
+            )
+            .values("student_id", "statement__area__subject_id")
+            .annotate(max_order=models.Max("statement__sub_area__order"))
+        )
+        if row["max_order"] is not None
+    }
+
+    statement_meta = {
+        sid: (subject_id, sub_order)
+        for sid, subject_id, sub_order in AssessmentStatement.objects.filter(
+            area__framework_id__in=assigned_fw_ids if assigned_fw_ids else AssessmentArea.objects.filter(framework__is_active=True).values_list("framework_id", flat=True)
+        ).values_list("pk", "area__subject_id", "sub_area__order")
+    }
+
+    def _statement_visible_for_student(student_id, statement_id):
+        subject_id, sub_order = statement_meta.get(statement_id, (None, None))
+        floor = student_subject_floor.get((student_id, subject_id))
+        if floor is None:
+            return True
+        return sub_order is not None and sub_order == floor
+
     def _latest_map(statement_ids):
         ids = list(statement_ids)
         if not student_ids or not ids:
@@ -1694,10 +1868,13 @@ def _cp_chart_context(request, class_group, data):
         ids = list(statement_ids)
         latest = _latest_map(ids)
         counts = {"SEC": 0, "DEV": 0, "EME": 0, "NYA": 0}
+        total = 0
         for sid in ids:
             for stu_id in student_ids:
+                if not _statement_visible_for_student(stu_id, sid):
+                    continue
                 counts[latest.get((stu_id, sid), "NYA")] += 1
-        total = len(ids) * len(student_ids)
+                total += 1
         return counts, total
 
     def _area_qs(subject):

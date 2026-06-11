@@ -323,6 +323,20 @@
                            class="text-decoration-none">
                             {{ row.student.full_name }}
                         </a>
+                        {% if row.extra_levels %}
+                        <button class="btn btn-sm btn-outline-secondary ms-2 py-0 px-1"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#{{ row.collapse_id }}"
+                                aria-expanded="false"
+                                aria-controls="{{ row.collapse_id }}"
+                                title="Show other levels">
+                            <i class="bi bi-chevron-down"></i>
+                        </button>
+                        {% endif %}
+                        {% if row.level_label %}
+                        <span class="badge bg-light text-dark border ms-2">{{ row.level_label }}</span>
+                        {% endif %}
                     </td>
                     <td class="text-center">
                         <span class="badge bg-secondary">{{ row.counts.NYA }}</span>
@@ -353,6 +367,38 @@
                         </div>
                     </td>
                 </tr>
+                {% if row.extra_levels %}
+                <tr class="collapse" id="{{ row.collapse_id }}">
+                    <td colspan="6" class="bg-light-subtle">
+                        <div class="small text-muted mb-2">Other levels in this topic</div>
+                        {% for level_row in row.extra_levels %}
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-light text-dark border" style="min-width:120px;">
+                                {{ level_row.level_label|default:"Other" }}
+                            </span>
+                            <span class="badge bg-secondary">N {{ level_row.counts.NYA }}</span>
+                            <span class="badge bg-danger">E {{ level_row.counts.EME }}</span>
+                            <span class="badge bg-warning text-dark">D {{ level_row.counts.DEV }}</span>
+                            <span class="badge bg-success">S {{ level_row.counts.SEC }}</span>
+                            <div class="d-flex mini-bar flex-grow-1" style="max-width:260px;">
+                                {% if level_row.pct_nya %}
+                                <div class="bg-secondary" style="width:{{ level_row.pct_nya }}%"></div>
+                                {% endif %}
+                                {% if level_row.pct_emerging %}
+                                <div class="bg-danger" style="width:{{ level_row.pct_emerging }}%"></div>
+                                {% endif %}
+                                {% if level_row.pct_developing %}
+                                <div class="bg-warning" style="width:{{ level_row.pct_developing }}%"></div>
+                                {% endif %}
+                                {% if level_row.pct_secure %}
+                                <div class="bg-success" style="width:{{ level_row.pct_secure }}%"></div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endif %}
                 {% endfor %}
             </tbody>
         </table>
