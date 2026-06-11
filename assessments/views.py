@@ -1553,7 +1553,7 @@ def _cp_build_data(request, class_group, date_from=None, date_to=None):
 
     statement_meta = {
         sid: (subject_id, area_id, sub_order)
-        for sid, subject_id, sub_order in AssessmentStatement.objects.filter(
+        for sid, subject_id, area_id, sub_order in AssessmentStatement.objects.filter(
             area__in=areas
         ).values_list("pk", "area__subject_id", "area_id", "sub_area__order")
     }
