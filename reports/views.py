@@ -19,8 +19,44 @@ from assessments.models import (
 )
 
 
-def _get_filter_options():
+def _get_filter_options(params=None):
     """Return all available filter values for the checkbox panel."""
+
+    params = params or {}
+
+    def _int_values(raw_values):
+        values = []
+        for raw in raw_values:
+            try:
+                values.append(int(raw))
+            except (TypeError, ValueError):
+                continue
+        return values
+
+    selected_framework_ids = _int_values(params.getlist("framework")) if hasattr(params, "getlist") else []
+    selected_subject_ids = _int_values(params.getlist("subject")) if hasattr(params, "getlist") else []
+    selected_area_years = _int_values(params.getlist("area_year")) if hasattr(params, "getlist") else []
+    selected_topics = params.getlist("topic") if hasattr(params, "getlist") else []
+
+    topic_areas = AssessmentArea.objects.all()
+    if selected_framework_ids:
+        topic_areas = topic_areas.filter(framework_id__in=selected_framework_ids)
+    if selected_subject_ids:
+        topic_areas = topic_areas.filter(subject_id__in=selected_subject_ids)
+    if selected_area_years:
+        topic_areas = topic_areas.filter(year_group__in=selected_area_years)
+
+    level_sub_areas = SubArea.objects.all()
+    if selected_topics:
+        level_sub_areas = level_sub_areas.filter(area__name__in=selected_topics)
+    else:
+        if selected_framework_ids:
+            level_sub_areas = level_sub_areas.filter(area__framework_id__in=selected_framework_ids)
+        if selected_subject_ids:
+            level_sub_areas = level_sub_areas.filter(area__subject_id__in=selected_subject_ids)
+        if selected_area_years:
+            level_sub_areas = level_sub_areas.filter(area__year_group__in=selected_area_years)
+
     return {
         "pathways": Student.PATHWAY_CHOICES,
         "phases": Student.PHASE_CHOICES,
@@ -33,13 +69,13 @@ def _get_filter_options():
         "subjects": Subject.objects.filter(is_active=True),
         "frameworks": AssessmentFramework.objects.filter(is_active=True),
         "topics": (
-            AssessmentArea.objects.exclude(name__exact="")
+            topic_areas.exclude(name__exact="")
             .values_list("name", flat=True)
             .distinct()
             .order_by("name")
         ),
         "levels": (
-            SubArea.objects.exclude(name__exact="")
+            level_sub_areas.exclude(name__exact="")
             .values_list("name", flat=True)
             .distinct()
             .order_by("name")
@@ -275,8 +311,8 @@ def cohort_report(request):
     from django.core.paginator import Paginator
     from django.db.models import Subquery, OuterRef
 
-    filter_options = _get_filter_options()
     effective_params, smart_defaults_applied = _cohort_effective_params(request)
+    filter_options = _get_filter_options(effective_params)
     date_from, date_to, time_filters = _get_date_range(request, effective_params)
 
     all_students = (
