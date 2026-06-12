@@ -1,0 +1,39 @@
+{% load assess_tags %}
+{% load student_tags %}
+{% for student in students %}
+<tr>
+    <td class="sticky-col fw-bold">
+        <a href="{% student_url student %}" class="text-decoration-none">
+            {{ student.full_name }}
+        </a>
+    </td>
+    <td>{{ student.class_group|default:"-" }}</td>
+    {% with summary=student_summaries|get:student.pk %}
+    <td class="text-center"><span class="badge status-NYA" id="summary-{{ student.pk }}-NYA">{{ summary.NYA }}</span></td>
+    <td class="text-center"><span class="badge status-EME" id="summary-{{ student.pk }}-EME">{{ summary.EME }}</span></td>
+    <td class="text-center"><span class="badge status-DEV" id="summary-{{ student.pk }}-DEV">{{ summary.DEV }}</span></td>
+    <td class="text-center"><span class="badge status-SEC" id="summary-{{ student.pk }}-SEC">{{ summary.SEC }}</span></td>
+    {% endwith %}
+    {% with s_grid=grid|get:student.pk %}
+    {% for stmt in statements %}
+    {% with status=s_grid|get:stmt.pk %}
+    {% with subject_access=editable_by_student|get:student.pk %}
+    {% with can_edit=subject_access|get:stmt.report_subject_id %}
+    <td class="text-center p-0" style="min-width:40px;">
+        <button type="button"
+                class="btn w-100 h-100 rounded-0 border-0 cohort-status-cell status-{{ status|default:'NYA' }} {% if not can_edit %}disabled opacity-75{% endif %}"
+                data-student-id="{{ student.pk }}"
+                data-statement-id="{{ stmt.pk }}"
+                data-status="{{ status|default:'NYA' }}"
+                data-can-edit="{% if can_edit %}1{% else %}0{% endif %}"
+                title="{% if can_edit %}Click to cycle assessment status{% else %}You cannot edit this assessment{% endif %}">
+            <span class="cohort-status-text">{{ status|default:"NYA" }}</span>
+        </button>
+    </td>
+    {% endwith %}
+    {% endwith %}
+    {% endwith %}
+    {% endfor %}
+    {% endwith %}
+</tr>
+{% endfor %}

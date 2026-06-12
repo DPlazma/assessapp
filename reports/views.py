@@ -278,6 +278,7 @@ def cohort_report(request):
     page_number = request.GET.get("page", 1)
     page_obj = paginator.get_page(page_number)
     students = list(page_obj.object_list)
+    loaded_students = page_obj.end_index() if paginator.count else 0
 
     grid = {}
     if students and statements:
@@ -328,12 +329,17 @@ def cohort_report(request):
         "active_filters": active_filters,
         "total_statements": len(statements),
         "total_students": total_students,
+        "loaded_students": loaded_students,
         "time_label": time_label,
         "smart_defaults_applied": smart_defaults_applied,
         "effective_querystring": effective_params.urlencode(),
         "page_obj": page_obj,
         "paginator": paginator,
     }
+
+    if request.GET.get("append") == "1":
+        return render(request, "reports/partials/cohort_rows_append.html", context)
+
     return render(request, "reports/cohort_report.html", context)
 
 

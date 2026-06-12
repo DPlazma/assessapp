@@ -1,0 +1,17 @@
+{% include "reports/partials/cohort_student_rows.html" %}
+
+<span id="cohort-loaded-count" hx-swap-oob="outerHTML">{{ loaded_students }}</span>
+
+<div id="cohort-load-more" hx-swap-oob="outerHTML" class="text-center mt-3">
+    {% if page_obj.has_next %}
+    <button type="button"
+            class="btn btn-outline-primary btn-sm"
+            hx-get="?{{ effective_querystring }}&page={{ page_obj.next_page_number }}&append=1"
+            hx-target="#cohort-rows"
+            hx-swap="beforeend">
+        <i class="bi bi-arrow-down-circle me-1"></i>Load more students
+    </button>
+    {% else %}
+    <span class="text-muted small">All students loaded.</span>
+    {% endif %}
+</div>

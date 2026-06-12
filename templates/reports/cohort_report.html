@@ -46,30 +46,12 @@
 
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
     <p class="text-muted mb-0">
-        Showing {{ students|length }} of {{ total_students }} student{{ total_students|pluralize }}
+        Showing <span id="cohort-loaded-count">{{ loaded_students }}</span> of {{ total_students }} student{{ total_students|pluralize }}
         &times; {{ total_statements }} statement{{ total_statements|pluralize }}
         <span class="badge bg-secondary ms-2"><i class="bi bi-clock me-1"></i>{{ time_label }}</span>
     </p>
     {% if page_obj.paginator.num_pages > 1 %}
-    <nav aria-label="Student pages">
-        <ul class="pagination pagination-sm mb-0">
-            {% if page_obj.has_previous %}
-            <li class="page-item">
-                <a class="page-link" href="?{{ effective_querystring }}&page={{ page_obj.previous_page_number }}">&laquo;</a>
-            </li>
-            {% endif %}
-            {% for num in page_obj.paginator.page_range %}
-            <li class="page-item {% if num == page_obj.number %}active{% endif %}">
-                <a class="page-link" href="?{{ effective_querystring }}&page={{ num }}">{{ num }}</a>
-            </li>
-            {% endfor %}
-            {% if page_obj.has_next %}
-            <li class="page-item">
-                <a class="page-link" href="?{{ effective_querystring }}&page={{ page_obj.next_page_number }}">&raquo;</a>
-            </li>
-            {% endif %}
-        </ul>
-    </nav>
+    <span class="badge bg-light text-dark border">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
     {% endif %}
 </div>
 
@@ -114,67 +96,25 @@
             {% endfor %}
         </tr>
     </thead>
-    <tbody>
-        {% for student in students %}
-        <tr>
-            <td class="sticky-col fw-bold">
-                <a href="{% student_url student %}" class="text-decoration-none">
-                    {{ student.full_name }}
-                </a>
-            </td>
-            <td>{{ student.class_group|default:"-" }}</td>
-            {% with summary=student_summaries|get:student.pk %}
-            <td class="text-center"><span class="badge status-NYA" id="summary-{{ student.pk }}-NYA">{{ summary.NYA }}</span></td>
-            <td class="text-center"><span class="badge status-EME" id="summary-{{ student.pk }}-EME">{{ summary.EME }}</span></td>
-            <td class="text-center"><span class="badge status-DEV" id="summary-{{ student.pk }}-DEV">{{ summary.DEV }}</span></td>
-            <td class="text-center"><span class="badge status-SEC" id="summary-{{ student.pk }}-SEC">{{ summary.SEC }}</span></td>
-            {% endwith %}
-            {% with s_grid=grid|get:student.pk %}
-            {% for stmt in statements %}
-            {% with status=s_grid|get:stmt.pk %}
-            {% with subject_access=editable_by_student|get:student.pk %}
-            {% with can_edit=subject_access|get:stmt.report_subject_id %}
-            <td class="text-center p-0" style="min-width:40px;">
-                <button type="button"
-                        class="btn w-100 h-100 rounded-0 border-0 cohort-status-cell status-{{ status|default:'NYA' }} {% if not can_edit %}disabled opacity-75{% endif %}"
-                        data-student-id="{{ student.pk }}"
-                        data-statement-id="{{ stmt.pk }}"
-                        data-status="{{ status|default:'NYA' }}"
-                        data-can-edit="{% if can_edit %}1{% else %}0{% endif %}"
-                        title="{% if can_edit %}Click to cycle assessment status{% else %}You cannot edit this assessment{% endif %}">
-                    <span class="cohort-status-text">{{ status|default:"NYA" }}</span>
-                </button>
-            </td>
-            {% endwith %}
-            {% endwith %}
-            {% endwith %}
-            {% endfor %}
-            {% endwith %}
-        </tr>
-        {% endfor %}
+    <tbody id="cohort-rows">
+        {% include "reports/partials/cohort_student_rows.html" %}
     </tbody>
 </table>
 </div>
 
-{% if page_obj.paginator.num_pages > 1 %}
-<nav aria-label="Student pages" class="mt-3">
-    <ul class="pagination pagination-sm justify-content-center">
-        {% if page_obj.has_previous %}
-        <li class="page-item">
-            <a class="page-link" href="?{{ effective_querystring }}&page={{ page_obj.previous_page_number }}">&laquo; Previous</a>
-        </li>
-        {% endif %}
-        <li class="page-item disabled">
-            <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-        </li>
-        {% if page_obj.has_next %}
-        <li class="page-item">
-            <a class="page-link" href="?{{ effective_querystring }}&page={{ page_obj.next_page_number }}">Next &raquo;</a>
-        </li>
-        {% endif %}
-    </ul>
-</nav>
-{% endif %}
+<div id="cohort-load-more" class="text-center mt-3">
+    {% if page_obj.has_next %}
+    <button type="button"
+            class="btn btn-outline-primary btn-sm"
+            hx-get="?{{ effective_querystring }}&page={{ page_obj.next_page_number }}&append=1"
+            hx-target="#cohort-rows"
+            hx-swap="beforeend">
+        <i class="bi bi-arrow-down-circle me-1"></i>Load more students
+    </button>
+    {% else %}
+    <span class="text-muted small">All students loaded.</span>
+    {% endif %}
+</div>
 
 {% endif %}
 {% endblock %}
