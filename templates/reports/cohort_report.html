@@ -32,22 +32,7 @@
 </div>
 {% endif %}
 
-{% if too_large %}
-<div class="alert alert-warning">
-    <h5 class="alert-heading"><i class="bi bi-speedometer2 me-2"></i>This report is very large</h5>
-    <p class="mb-2">
-        The current filters would generate a grid of
-        <strong>{{ total_students }} student{{ total_students|pluralize }}</strong>
-        &times;
-        <strong>{{ total_statements }} statement{{ total_statements|pluralize }}</strong>
-        ({{ total_cells }} cells), which would be slow to load and may time out.
-    </p>
-    <p class="mb-3">Use the filters above to narrow down the students or subjects, or load it anyway if you're sure.</p>
-    <a href="?{{ force_querystring }}" class="btn btn-warning">
-        <i class="bi bi-lightning-charge me-1"></i>Load anyway
-    </a>
-</div>
-{% elif not statements %}
+{% if not statements %}
 <div class="alert alert-info">
     <i class="bi bi-info-circle me-1"></i>
     No statements match the current filters. Try adjusting the subject or framework filters.

@@ -226,7 +226,6 @@ def report_index(request):
     return render(request, "reports/index.html")
 
 
-COHORT_CELL_LIMIT = 3000   # above this, show a size gate instead of loading
 COHORT_PAGE_SIZE = 30       # students per page
 
 
@@ -235,6 +234,7 @@ def cohort_report(request):
     """Grid of students × statements showing latest RAG status per student.
 
     Filters: pathway, phase, class group, year group, subject, framework.
+    Pagination keeps each page query small regardless of cohort size.
     """
     from django.core.paginator import Paginator
     from django.db.models import Subquery, OuterRef
@@ -242,7 +242,6 @@ def cohort_report(request):
     filter_options = _get_filter_options()
     effective_params, smart_defaults_applied = _cohort_effective_params(request)
     date_from, date_to, time_filters = _get_date_range(request, effective_params)
-    force_load = request.GET.get("force") == "1"
 
     all_students = (
         Student.objects.filter(is_active=True)
@@ -251,6 +250,14 @@ def cohort_report(request):
     )
     all_students, active_filters = _apply_student_filters(request, all_students, effective_params)
     active_filters.update(time_filters)
+
+    # Also record subject/framework selections so the filter panel stays in sync
+    subject_filter = effective_params.getlist("subject")
+    framework_filter = effective_params.getlist("framework")
+    if subject_filter:
+        active_filters["subject"] = subject_filter
+    if framework_filter:
+        active_filters["framework"] = framework_filter
 
     areas = AssessmentArea.objects.select_related("subject", "framework").prefetch_related(
         Prefetch("statements", queryset=AssessmentStatement.objects.order_by("order", "pk"))
@@ -264,27 +271,9 @@ def cohort_report(request):
             statements.append(stmt)
 
     total_students = all_students.count()
-    total_cells = total_students * len(statements)
-    too_large = total_cells > COHORT_CELL_LIMIT and not force_load
     time_label = _time_label(date_from, date_to, time_filters)
 
-    if too_large:
-        # Don't run the expensive query — show the gate page instead
-        context = {
-            "too_large": True,
-            "total_students": total_students,
-            "total_statements": len(statements),
-            "total_cells": total_cells,
-            "filter_options": filter_options,
-            "active_filters": active_filters,
-            "time_label": time_label,
-            "smart_defaults_applied": smart_defaults_applied,
-            "effective_querystring": effective_params.urlencode(),
-            "force_querystring": (effective_params.urlencode() + "&force=1").lstrip("&"),
-        }
-        return render(request, "reports/cohort_report.html", context)
-
-    # Paginate students
+    # Paginate — keeps each page's query bounded to COHORT_PAGE_SIZE × statements
     paginator = Paginator(all_students, COHORT_PAGE_SIZE)
     page_number = request.GET.get("page", 1)
     page_obj = paginator.get_page(page_number)
@@ -329,7 +318,6 @@ def cohort_report(request):
         }
 
     context = {
-        "too_large": False,
         "students": students,
         "statements": statements,
         "areas": areas,
