@@ -1,13 +1,14 @@
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Prefetch
 from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from students.models import Student, Subject, ClassGroup
 from core.models import AcademicYear, Term
+from staff.models import ClassAssignment, ClassCover, SubjectLead
 from assessments.views import _can_assess_student
 from assessments.models import (
     AssessmentFramework,
@@ -35,19 +36,20 @@ def _get_filter_options():
     }
 
 
-def _get_date_range(request):
+def _get_date_range(request, params=None):
     """Determine the date range from GET params (academic_year, term, date_from, date_to).
 
     Priority: explicit dates > term > academic year.
     Returns (date_from, date_to, active_time_filters dict).
     """
+    params = params or request.GET
     active = {}
     date_from = None
     date_to = None
 
     # Explicit custom dates take highest priority
-    raw_from = request.GET.get("date_from", "").strip()
-    raw_to = request.GET.get("date_to", "").strip()
+    raw_from = params.get("date_from", "").strip()
+    raw_to = params.get("date_to", "").strip()
     if raw_from or raw_to:
         from datetime import date as dt_date
         try:
@@ -63,7 +65,7 @@ def _get_date_range(request):
             return date_from, date_to, active
 
     # Term overrides academic year
-    term_id = request.GET.get("term", "").strip()
+    term_id = params.get("term", "").strip()
     if term_id:
         try:
             term = Term.objects.get(pk=int(term_id))
@@ -73,7 +75,7 @@ def _get_date_range(request):
             pass
 
     # Academic year
-    ay_id = request.GET.get("academic_year", "").strip()
+    ay_id = params.get("academic_year", "").strip()
     if ay_id:
         try:
             ay = AcademicYear.objects.get(pk=int(ay_id))
@@ -117,29 +119,30 @@ def _time_label(date_from, date_to, time_filters):
     return "All time"
 
 
-def _apply_student_filters(request, qs):
+def _apply_student_filters(request, qs, params=None):
     """Apply checkbox filters from GET params to a Student queryset.
 
     Returns (filtered_qs, active_filters dict).
     """
+    params = params or request.GET
     active = {}
 
-    pathways = request.GET.getlist("pathway")
+    pathways = params.getlist("pathway")
     if pathways:
         qs = qs.filter(pathway__in=pathways)
         active["pathway"] = pathways
 
-    phases = request.GET.getlist("phase")
+    phases = params.getlist("phase")
     if phases:
         qs = qs.filter(phase__in=[int(p) for p in phases])
         active["phase"] = phases
 
-    class_ids = request.GET.getlist("class_group")
+    class_ids = params.getlist("class_group")
     if class_ids:
         qs = qs.filter(class_group_id__in=[int(c) for c in class_ids])
         active["class_group"] = class_ids
 
-    year_groups = request.GET.getlist("year_group")
+    year_groups = params.getlist("year_group")
     if year_groups:
         qs = qs.filter(year_group__in=[int(y) for y in year_groups])
         active["year_group"] = year_groups
@@ -147,17 +150,74 @@ def _apply_student_filters(request, qs):
     return qs, active
 
 
-def _apply_area_filters(request, qs):
+def _apply_area_filters(request, qs, params=None):
     """Apply subject/framework filters to an AssessmentArea queryset."""
-    subject_ids = request.GET.getlist("subject")
+    params = params or request.GET
+    subject_ids = params.getlist("subject")
     if subject_ids:
         qs = qs.filter(subject_id__in=[int(s) for s in subject_ids])
 
-    framework_ids = request.GET.getlist("framework")
+    framework_ids = params.getlist("framework")
     if framework_ids:
         qs = qs.filter(framework_id__in=[int(f) for f in framework_ids])
 
     return qs
+
+
+def _cohort_effective_params(request):
+    """Apply smart defaults for the cohort report when filters are empty or partial."""
+    params = request.GET.copy()
+    applied = []
+
+    has_time_filters = any(
+        params.get(key, "").strip()
+        for key in ("date_from", "date_to", "term", "academic_year")
+    )
+    has_scope_filters = any(
+        params.getlist(key)
+        for key in ("pathway", "phase", "class_group", "year_group", "subject", "framework")
+    )
+
+    if not has_time_filters:
+        current_term = Term.get_current()
+        if current_term:
+            params.setlist("term", [str(current_term.pk)])
+            applied.append(f"Current term: {current_term}")
+
+    if not has_scope_filters:
+        profile = getattr(request.user, "staffprofile", None)
+        defaulted = False
+        if profile and profile.is_subject_lead:
+            subject_ids = list(
+                SubjectLead.objects.filter(user=request.user).values_list("subject_id", flat=True)
+            )
+            if subject_ids:
+                params.setlist("subject", [str(subject_id) for subject_id in subject_ids])
+                applied.append("Your subject lead areas")
+                defaulted = True
+
+        if profile and not defaulted and profile.is_pathway_lead and profile.lead_pathway:
+            params.setlist("pathway", [profile.lead_pathway])
+            applied.append(f"Your pathway: {dict(Student.PATHWAY_CHOICES).get(profile.lead_pathway, profile.lead_pathway)}")
+            defaulted = True
+
+        if not defaulted:
+            today = timezone.now().date()
+            class_ids = set(
+                ClassAssignment.objects.filter(user=request.user).values_list("class_group_id", flat=True)
+            )
+            class_ids.update(
+                ClassCover.objects.filter(
+                    user=request.user,
+                    start_date__lte=today,
+                    end_date__gte=today,
+                ).values_list("class_group_id", flat=True)
+            )
+            if class_ids:
+                params.setlist("class_group", [str(class_id) for class_id in sorted(class_ids)])
+                applied.append("Your assigned classes")
+
+    return params, applied
 
 
 @login_required
@@ -173,27 +233,32 @@ def cohort_report(request):
     Filters: pathway, phase, class group, year group, subject, framework.
     """
     filter_options = _get_filter_options()
-    date_from, date_to, time_filters = _get_date_range(request)
+    effective_params, smart_defaults_applied = _cohort_effective_params(request)
+    date_from, date_to, time_filters = _get_date_range(request, effective_params)
 
     students = Student.objects.filter(is_active=True).select_related("class_group")
-    students, active_filters = _apply_student_filters(request, students)
+    students, active_filters = _apply_student_filters(request, students, effective_params)
     active_filters.update(time_filters)
+    students = list(students.order_by("last_name", "first_name"))
 
     # Get assessment areas (filtered by subject/framework if requested)
-    areas = AssessmentArea.objects.select_related("subject", "framework").prefetch_related("statements")
-    areas = _apply_area_filters(request, areas)
+    areas = AssessmentArea.objects.select_related("subject", "framework").prefetch_related(
+        Prefetch("statements", queryset=AssessmentStatement.objects.order_by("order", "pk"))
+    )
+    areas = list(_apply_area_filters(request, areas, effective_params))
 
     # Build list of all statements from filtered areas
     statements = []
     for area in areas:
         for stmt in area.statements.all():
+            stmt.report_subject_id = area.subject_id
             statements.append(stmt)
 
     # Build a grid: {student_id: {statement_id: status}}
     grid = {}
-    if students.exists() and statements:
+    if students and statements:
         stmt_ids = [s.pk for s in statements]
-        student_ids = list(students.values_list("pk", flat=True))
+        student_ids = [student.pk for student in students]
 
         # Subquery: latest record per student+statement (within date window)
         from django.db.models import Max, Subquery, OuterRef
@@ -250,6 +315,8 @@ def cohort_report(request):
         "active_filters": active_filters,
         "total_statements": len(statements),
         "time_label": time_label,
+        "smart_defaults_applied": smart_defaults_applied,
+        "effective_querystring": effective_params.urlencode(),
     }
     return render(request, "reports/cohort_report.html", context)
 
