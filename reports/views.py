@@ -291,9 +291,11 @@ def cohort_report(request):
         student_summaries[student.pk] = counts
 
     editable_by_student = {}
-    subjects_by_id = {subject.pk: subject for subject in Subject.objects.filter(
-        pk__in=areas.values_list("subject_id", flat=True).distinct()
-    )}
+    area_subject_ids = sorted({area.subject_id for area in areas})
+    subjects_by_id = {
+        subject.pk: subject
+        for subject in Subject.objects.filter(pk__in=area_subject_ids)
+    }
     for student in students:
         editable_by_student[student.pk] = {}
         for subject_id, subject in subjects_by_id.items():

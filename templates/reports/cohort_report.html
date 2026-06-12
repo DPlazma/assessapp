@@ -57,6 +57,21 @@
     <span class="badge status-SEC">SEC — Secure</span>
 </div>
 
+<div class="card mb-3">
+    <div class="card-body py-2 d-flex align-items-center flex-wrap gap-2">
+        <span class="small text-muted"><i class="bi bi-mouse me-1"></i>Quick edit:</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary cohort-mode-btn active" data-mode="cycle">Click to cycle</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary cohort-mode-btn" data-mode="paint">Paint mode</button>
+        <div class="btn-group btn-group-sm" id="paintStatusPicker" hidden>
+            <button type="button" class="btn status-NYA cohort-paint-status active" data-status="NYA">NYA</button>
+            <button type="button" class="btn status-EME cohort-paint-status" data-status="EME">EME</button>
+            <button type="button" class="btn status-DEV cohort-paint-status" data-status="DEV">DEV</button>
+            <button type="button" class="btn status-SEC cohort-paint-status" data-status="SEC">SEC</button>
+        </div>
+        <span class="small text-muted" id="cohortEditHint">Click a cell to cycle its mark.</span>
+    </div>
+</div>
+
 <div class="table-responsive">
 <table class="table table-sm table-bordered align-middle" style="font-size: 0.8rem;">
     <thead class="table-light">
@@ -144,6 +159,9 @@
         opacity: 0.65;
         pointer-events: none;
     }
+    .cohort-paint-status.active {
+        box-shadow: inset 0 0 0 2px rgba(255,255,255,0.7);
+    }
 </style>
 {% endblock %}
 
@@ -151,6 +169,9 @@
 <script>
 (function() {
     const cycle = ['NYA', 'EME', 'DEV', 'SEC'];
+    let editMode = 'cycle';
+    let paintStatus = 'NYA';
+    let isDragging = false;
     const csrfToken = document.cookie
         .split('; ')
         .find(row => row.startsWith('csrftoken='))
@@ -172,11 +193,12 @@
         if (newEl) newEl.textContent = parseInt(newEl.textContent || '0', 10) + 1;
     }
 
-    async function updateCell(button) {
+    async function updateCell(button, targetStatus) {
         if (button.dataset.canEdit !== '1' || button.classList.contains('is-saving')) return;
 
         const current = button.dataset.status || 'NYA';
-        const next = cycle[(cycle.indexOf(current) + 1) % cycle.length];
+        const next = targetStatus || cycle[(cycle.indexOf(current) + 1) % cycle.length];
+        if (current === next) return;
         const studentId = button.dataset.studentId;
         const statementId = button.dataset.statementId;
 
@@ -214,11 +236,70 @@
         }
     }
 
+    function syncModeUi() {
+        document.querySelectorAll('.cohort-mode-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.mode === editMode);
+            btn.classList.toggle('btn-primary', btn.dataset.mode === editMode);
+            btn.classList.toggle('btn-outline-secondary', btn.dataset.mode !== editMode);
+        });
+        const picker = document.getElementById('paintStatusPicker');
+        const hint = document.getElementById('cohortEditHint');
+        if (picker) picker.hidden = editMode !== 'paint';
+        if (hint) {
+            hint.textContent = editMode === 'paint'
+                ? 'Drag across cells to fill the selected status.'
+                : 'Click a cell to cycle its mark.';
+        }
+    }
+
+    function setPaintStatus(status) {
+        paintStatus = status;
+        document.querySelectorAll('.cohort-paint-status').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.status === status);
+        });
+    }
+
+    document.querySelectorAll('.cohort-mode-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            editMode = this.dataset.mode;
+            syncModeUi();
+        });
+    });
+
+    document.querySelectorAll('.cohort-paint-status').forEach(button => {
+        button.addEventListener('click', function() {
+            setPaintStatus(this.dataset.status);
+        });
+    });
+
     document.addEventListener('click', function(event) {
         const button = event.target.closest('.cohort-status-cell');
         if (!button) return;
-        updateCell(button);
+        if (editMode === 'cycle') {
+            updateCell(button);
+        }
     });
+
+    document.addEventListener('mousedown', function(event) {
+        const button = event.target.closest('.cohort-status-cell');
+        if (!button || editMode !== 'paint') return;
+        isDragging = true;
+        event.preventDefault();
+        updateCell(button, paintStatus);
+    });
+
+    document.addEventListener('mouseover', function(event) {
+        const button = event.target.closest('.cohort-status-cell');
+        if (!button || !isDragging || editMode !== 'paint') return;
+        updateCell(button, paintStatus);
+    });
+
+    document.addEventListener('mouseup', function() {
+        isDragging = false;
+    });
+
+    syncModeUi();
+    setPaintStatus(paintStatus);
 })();
 </script>
 {% endblock %}
