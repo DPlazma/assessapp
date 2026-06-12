@@ -226,42 +226,74 @@ def report_index(request):
     return render(request, "reports/index.html")
 
 
+COHORT_CELL_LIMIT = 3000   # above this, show a size gate instead of loading
+COHORT_PAGE_SIZE = 30       # students per page
+
+
 @login_required
 def cohort_report(request):
     """Grid of students × statements showing latest RAG status per student.
 
     Filters: pathway, phase, class group, year group, subject, framework.
     """
+    from django.core.paginator import Paginator
+    from django.db.models import Subquery, OuterRef
+
     filter_options = _get_filter_options()
     effective_params, smart_defaults_applied = _cohort_effective_params(request)
     date_from, date_to, time_filters = _get_date_range(request, effective_params)
+    force_load = request.GET.get("force") == "1"
 
-    students = Student.objects.filter(is_active=True).select_related("class_group")
-    students, active_filters = _apply_student_filters(request, students, effective_params)
+    all_students = (
+        Student.objects.filter(is_active=True)
+        .select_related("class_group")
+        .order_by("last_name", "first_name")
+    )
+    all_students, active_filters = _apply_student_filters(request, all_students, effective_params)
     active_filters.update(time_filters)
-    students = list(students.order_by("last_name", "first_name"))
 
-    # Get assessment areas (filtered by subject/framework if requested)
     areas = AssessmentArea.objects.select_related("subject", "framework").prefetch_related(
         Prefetch("statements", queryset=AssessmentStatement.objects.order_by("order", "pk"))
     )
     areas = list(_apply_area_filters(request, areas, effective_params))
 
-    # Build list of all statements from filtered areas
     statements = []
     for area in areas:
         for stmt in area.statements.all():
             stmt.report_subject_id = area.subject_id
             statements.append(stmt)
 
-    # Build a grid: {student_id: {statement_id: status}}
+    total_students = all_students.count()
+    total_cells = total_students * len(statements)
+    too_large = total_cells > COHORT_CELL_LIMIT and not force_load
+    time_label = _time_label(date_from, date_to, time_filters)
+
+    if too_large:
+        # Don't run the expensive query — show the gate page instead
+        context = {
+            "too_large": True,
+            "total_students": total_students,
+            "total_statements": len(statements),
+            "total_cells": total_cells,
+            "filter_options": filter_options,
+            "active_filters": active_filters,
+            "time_label": time_label,
+            "smart_defaults_applied": smart_defaults_applied,
+            "effective_querystring": effective_params.urlencode(),
+            "force_querystring": (effective_params.urlencode() + "&force=1").lstrip("&"),
+        }
+        return render(request, "reports/cohort_report.html", context)
+
+    # Paginate students
+    paginator = Paginator(all_students, COHORT_PAGE_SIZE)
+    page_number = request.GET.get("page", 1)
+    page_obj = paginator.get_page(page_number)
+    students = list(page_obj.object_list)
+
     grid = {}
     if students and statements:
         stmt_ids = [s.pk for s in statements]
         student_ids = [student.pk for student in students]
-
-        # Subquery: latest record per student+statement (within date window)
-        from django.db.models import Max, Subquery, OuterRef
 
         latest_qs = AssessmentRecord.objects.filter(
             student_id=OuterRef("student_id"),
@@ -270,43 +302,34 @@ def cohort_report(request):
         latest_qs = _apply_date_filter_to_records(latest_qs, date_from, date_to)
         latest_pks = latest_qs.order_by("-assessed_date", "-created_at").values("pk")[:1]
 
-        base_records = AssessmentRecord.objects.filter(
+        for r in AssessmentRecord.objects.filter(
             student_id__in=student_ids,
             statement_id__in=stmt_ids,
             pk__in=Subquery(latest_pks),
-        )
-        records = base_records.values("student_id", "statement_id", "status")
-
-        for r in records:
+        ).values("student_id", "statement_id", "status"):
             grid.setdefault(r["student_id"], {})[r["statement_id"]] = r["status"]
 
-    # Summary counts per student
     student_summaries = {}
     for student in students:
         s_grid = grid.get(student.pk, {})
         counts = {"SEC": 0, "DEV": 0, "EME": 0, "NYA": 0}
         for stmt in statements:
-            status = s_grid.get(stmt.pk, "NYA")
-            counts[status] = counts.get(status, 0) + 1
+            counts[s_grid.get(stmt.pk, "NYA")] += 1
         student_summaries[student.pk] = counts
 
-    editable_by_student = {}
     area_subject_ids = sorted({area.subject_id for area in areas})
     subjects_by_id = {
-        subject.pk: subject
-        for subject in Subject.objects.filter(pk__in=area_subject_ids)
+        s.pk: s for s in Subject.objects.filter(pk__in=area_subject_ids)
     }
+    editable_by_student = {}
     for student in students:
-        editable_by_student[student.pk] = {}
-        for subject_id, subject in subjects_by_id.items():
-            editable_by_student[student.pk][subject_id] = _can_assess_student(
-                request.user, student, subject
-            )
-
-    # Describe the active time window
-    time_label = _time_label(date_from, date_to, time_filters)
+        editable_by_student[student.pk] = {
+            subject_id: _can_assess_student(request.user, student, subject)
+            for subject_id, subject in subjects_by_id.items()
+        }
 
     context = {
+        "too_large": False,
         "students": students,
         "statements": statements,
         "areas": areas,
@@ -316,9 +339,12 @@ def cohort_report(request):
         "filter_options": filter_options,
         "active_filters": active_filters,
         "total_statements": len(statements),
+        "total_students": total_students,
         "time_label": time_label,
         "smart_defaults_applied": smart_defaults_applied,
         "effective_querystring": effective_params.urlencode(),
+        "page_obj": page_obj,
+        "paginator": paginator,
     }
     return render(request, "reports/cohort_report.html", context)
 
