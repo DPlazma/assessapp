@@ -13,6 +13,7 @@ from assessments.views import _can_assess_student
 from assessments.models import (
     AssessmentFramework,
     AssessmentArea,
+    SubArea,
     AssessmentStatement,
     AssessmentRecord,
 )
@@ -31,6 +32,23 @@ def _get_filter_options():
         ),
         "subjects": Subject.objects.filter(is_active=True),
         "frameworks": AssessmentFramework.objects.filter(is_active=True),
+        "topics": (
+            AssessmentArea.objects.exclude(name__exact="")
+            .values_list("name", flat=True)
+            .distinct()
+            .order_by("name")
+        ),
+        "levels": (
+            SubArea.objects.exclude(name__exact="")
+            .values_list("name", flat=True)
+            .distinct()
+            .order_by("name")
+        ),
+        "area_years": sorted(
+            AssessmentArea.objects.filter(year_group__isnull=False)
+            .values_list("year_group", flat=True)
+            .distinct()
+        ),
         "academic_years": AcademicYear.objects.all(),
         "terms": Term.objects.select_related("academic_year").all(),
     }
@@ -161,6 +179,14 @@ def _apply_area_filters(request, qs, params=None):
     if framework_ids:
         qs = qs.filter(framework_id__in=[int(f) for f in framework_ids])
 
+    topics = params.getlist("topic")
+    if topics:
+        qs = qs.filter(name__in=topics)
+
+    area_years = params.getlist("area_year")
+    if area_years:
+        qs = qs.filter(year_group__in=[int(y) for y in area_years])
+
     return qs
 
 
@@ -175,7 +201,17 @@ def _cohort_effective_params(request):
     )
     has_scope_filters = any(
         params.getlist(key)
-        for key in ("pathway", "phase", "class_group", "year_group", "subject", "framework")
+        for key in (
+            "pathway",
+            "phase",
+            "class_group",
+            "year_group",
+            "subject",
+            "framework",
+            "topic",
+            "level",
+            "area_year",
+        )
     )
 
     if not has_time_filters:
@@ -251,16 +287,29 @@ def cohort_report(request):
     all_students, active_filters = _apply_student_filters(request, all_students, effective_params)
     active_filters.update(time_filters)
 
-    # Also record subject/framework selections so the filter panel stays in sync
+    # Also record area/subject/framework selections so the filter panel stays in sync
+    level_filter = effective_params.getlist("level")
     subject_filter = effective_params.getlist("subject")
     framework_filter = effective_params.getlist("framework")
+    topic_filter = effective_params.getlist("topic")
+    area_year_filter = effective_params.getlist("area_year")
+    if level_filter:
+        active_filters["level"] = level_filter
     if subject_filter:
         active_filters["subject"] = subject_filter
     if framework_filter:
         active_filters["framework"] = framework_filter
+    if topic_filter:
+        active_filters["topic"] = topic_filter
+    if area_year_filter:
+        active_filters["area_year"] = area_year_filter
+
+    statements_qs = AssessmentStatement.objects.select_related("sub_area").order_by("order", "pk")
+    if level_filter:
+        statements_qs = statements_qs.filter(sub_area__name__in=level_filter)
 
     areas = AssessmentArea.objects.select_related("subject", "framework").prefetch_related(
-        Prefetch("statements", queryset=AssessmentStatement.objects.order_by("order", "pk"))
+        Prefetch("statements", queryset=statements_qs)
     )
     areas = list(_apply_area_filters(request, areas, effective_params))
 

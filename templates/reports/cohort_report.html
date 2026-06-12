@@ -49,6 +49,7 @@
         Showing <span id="cohort-loaded-count">{{ loaded_students }}</span> of {{ total_students }} student{{ total_students|pluralize }}
         &times; {{ total_statements }} statement{{ total_statements|pluralize }}
         <span class="badge bg-secondary ms-2"><i class="bi bi-clock me-1"></i>{{ time_label }}</span>
+        <span class="badge bg-light text-dark border ms-2">Visible: <span id="cohort-visible-count">{{ students|length }}</span></span>
     </p>
     {% if page_obj.paginator.num_pages > 1 %}
     <span class="badge bg-light text-dark border">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
@@ -57,10 +58,10 @@
 
 {# Legend #}
 <div class="d-flex gap-2 mb-3 flex-wrap">
-    <span class="badge status-NYA">NYA — Not Yet Assessed</span>
-    <span class="badge status-EME">EME — Emerging</span>
-    <span class="badge status-DEV">DEV — Developing</span>
-    <span class="badge status-SEC">SEC — Secure</span>
+    <button type="button" class="btn btn-sm status-NYA cohort-mark-filter active" data-status="NYA">NYA - Not Yet Assessed</button>
+    <button type="button" class="btn btn-sm status-EME cohort-mark-filter active" data-status="EME">EME - Emerging</button>
+    <button type="button" class="btn btn-sm status-DEV cohort-mark-filter active" data-status="DEV">DEV - Developing</button>
+    <button type="button" class="btn btn-sm status-SEC cohort-mark-filter active" data-status="SEC">SEC - Secure</button>
 </div>
 
 <div class="card mb-3">
@@ -147,6 +148,10 @@
     .cohort-paint-status.active {
         box-shadow: inset 0 0 0 2px rgba(255,255,255,0.7);
     }
+    .cohort-mark-filter.is-off {
+        opacity: 0.45;
+        filter: grayscale(0.2);
+    }
 </style>
 {% endblock %}
 
@@ -157,10 +162,54 @@
     let editMode = 'cycle';
     let paintStatus = 'NYA';
     let isDragging = false;
+    const visibleStatuses = new Set(cycle);
     const csrfToken = document.cookie
         .split('; ')
         .find(row => row.startsWith('csrftoken='))
         ?.split('=')[1] || '';
+
+    function applyMarkFilterToRows() {
+        const rows = document.querySelectorAll('#cohort-rows tr');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const buttons = row.querySelectorAll('.cohort-status-cell');
+            if (!buttons.length) {
+                row.classList.remove('d-none');
+                return;
+            }
+
+            const keepVisible = Array.from(buttons).some(btn => visibleStatuses.has(btn.dataset.status || 'NYA'));
+            row.classList.toggle('d-none', !keepVisible);
+            if (keepVisible) visibleCount += 1;
+        });
+
+        const visibleEl = document.getElementById('cohort-visible-count');
+        if (visibleEl) visibleEl.textContent = String(visibleCount);
+    }
+
+    function syncMarkFilterUi() {
+        document.querySelectorAll('.cohort-mark-filter').forEach(btn => {
+            const isOn = visibleStatuses.has(btn.dataset.status);
+            btn.classList.toggle('active', isOn);
+            btn.classList.toggle('is-off', !isOn);
+        });
+    }
+
+    function toggleMarkStatus(status) {
+        if (visibleStatuses.has(status)) {
+            visibleStatuses.delete(status);
+        } else {
+            visibleStatuses.add(status);
+        }
+
+        if (!visibleStatuses.size) {
+            cycle.forEach(code => visibleStatuses.add(code));
+        }
+
+        syncMarkFilterUi();
+        applyMarkFilterToRows();
+    }
 
     function applyStatus(button, status) {
         button.dataset.status = status;
@@ -213,6 +262,7 @@
 
             applyStatus(button, data.status);
             bumpSummary(studentId, current, data.status);
+            applyMarkFilterToRows();
         } catch (err) {
             console.error(err);
             alert('Could not update this assessment cell.');
@@ -258,6 +308,12 @@
     });
 
     document.addEventListener('click', function(event) {
+        const button = event.target.closest('.cohort-mark-filter');
+        if (!button) return;
+        toggleMarkStatus(button.dataset.status);
+    });
+
+    document.addEventListener('click', function(event) {
         const button = event.target.closest('.cohort-status-cell');
         if (!button) return;
         if (editMode === 'cycle') {
@@ -283,8 +339,16 @@
         isDragging = false;
     });
 
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+        if (event.target && event.target.id === 'cohort-rows') {
+            applyMarkFilterToRows();
+        }
+    });
+
     syncModeUi();
     setPaintStatus(paintStatus);
+    syncMarkFilterUi();
+    applyMarkFilterToRows();
 })();
 </script>
 {% endblock %}

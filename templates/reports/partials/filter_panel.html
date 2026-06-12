@@ -131,6 +131,45 @@ Renders inside a collapsible card that submits via GET.
                         {% endfor %}
                     </div>
 
+                    {# Topic (area) #}
+                    <div class="col-md-4 col-lg-2">
+                        <label class="form-label fw-bold">Topic</label>
+                        {% for topic in filter_options.topics %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox"
+                                   name="topic" value="{{ topic }}" id="topic_{{ forloop.counter }}"
+                                   {% if topic in active_filters.topic %}checked{% endif %}>
+                            <label class="form-check-label" for="topic_{{ forloop.counter }}">{{ topic }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    {# Level (sub-area) #}
+                    <div class="col-md-4 col-lg-2">
+                        <label class="form-label fw-bold">Level</label>
+                        {% for level in filter_options.levels %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox"
+                                   name="level" value="{{ level }}" id="level_{{ forloop.counter }}"
+                                   {% if level in active_filters.level %}checked{% endif %}>
+                            <label class="form-check-label" for="level_{{ forloop.counter }}">{{ level }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    {# Curriculum year (area year group) #}
+                    <div class="col-md-4 col-lg-2">
+                        <label class="form-label fw-bold">Curriculum Year</label>
+                        {% for area_year in filter_options.area_years %}
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox"
+                                   name="area_year" value="{{ area_year }}" id="area_year_{{ area_year }}"
+                                   {% if area_year|stringformat:"d" in active_filters.area_year %}checked{% endif %}>
+                            <label class="form-check-label" for="area_year_{{ area_year }}">Year {{ area_year }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+
                 </div>
 
                 <div class="mt-3 d-flex gap-2">
