@@ -2032,18 +2032,64 @@ def class_progress(request, class_id):
     date_from, date_to, period_label = _cp_date_range(request)
     data = _cp_build_data(request, class_group, date_from, date_to)
 
+    assigned_fw_ids = set(
+        FrameworkAssignment.objects.filter(
+            class_group=class_group, framework__is_active=True
+        ).values_list("framework_id", flat=True)
+    )
+    comparable_subject_ids = set(
+        AssessmentArea.objects.filter(framework_id__in=assigned_fw_ids)
+        .values_list("subject_id", flat=True)
+        .distinct()
+    )
+    selected_subject = request.GET.get("subject")
+    if selected_subject:
+        try:
+            selected_subject_id = int(selected_subject)
+        except ValueError:
+            selected_subject_id = None
+        else:
+            if selected_subject_id in comparable_subject_ids:
+                comparable_subject_ids = {selected_subject_id}
+
+    comparable_classes = ClassGroup.objects.none()
+    if comparable_subject_ids:
+        comparable_classes = (
+            ClassGroup.objects.filter(
+                framework_assignments__framework__is_active=True,
+                framework_assignments__framework__areas__subject_id__in=comparable_subject_ids,
+            )
+            .exclude(pk=class_group.pk)
+            .distinct()
+            .order_by("year_group", "name")
+        )
+    comparable_class_ids = list(comparable_classes.values_list("pk", flat=True))
+
     # View toggle
     view_mode = request.GET.get("view", "both")  # "chart", "table", "both"
 
-    # Comparison mode — load a second period
+    # Comparison mode — load a second class or a second period
     compare = request.GET.get("compare")  # term PK to compare against
+    compare_class = request.GET.get("compare_class")
     compare_data = None
     compare_label = ""
-    if compare:
+    compare_mode = ""
+    if compare_class:
+        try:
+            cmp_class = ClassGroup.objects.get(
+                pk=int(compare_class), pk__in=comparable_class_ids
+            )
+            compare_data = _cp_build_data(request, cmp_class, date_from, date_to)
+            compare_label = cmp_class.name
+            compare_mode = "class"
+        except (ClassGroup.DoesNotExist, ValueError):
+            pass
+    elif compare:
         try:
             cmp_term = Term.objects.select_related("academic_year").get(pk=int(compare))
             compare_data = _cp_build_data(request, class_group, cmp_term.start_date, cmp_term.end_date)
             compare_label = str(cmp_term)
+            compare_mode = "term"
         except (Term.DoesNotExist, ValueError):
             pass
 
@@ -2060,8 +2106,11 @@ def class_progress(request, class_id):
         "selected_academic_year": request.GET.get("academic_year", ""),
         "selected_term": request.GET.get("term", ""),
         "compare": compare,
+        "compare_class": compare_class,
         "compare_data": compare_data,
         "compare_label": compare_label,
+        "compare_mode": compare_mode,
+        "comparable_classes": comparable_classes,
         **data,
         **chart_ctx,
     }

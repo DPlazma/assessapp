@@ -156,6 +156,17 @@
                             {% endfor %}
                         </select>
                     </div>
+                    <div class="col-md-6 col-lg-3">
+                        <label class="form-label fw-bold small">Compare with class</label>
+                        <select name="compare_class" class="form-select form-select-sm">
+                            <option value="">No class comparison</option>
+                            {% for cg in comparable_classes %}
+                            <option value="{{ cg.pk }}" {% if compare_class == cg.pk|stringformat:"d" %}selected{% endif %}>
+                                {{ cg.name }}{% if cg.year_group %} · Year {{ cg.year_group }}{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
 
                     {# ── Show all time ── #}
                     <div class="col-md-6 col-lg-3 d-flex align-items-end">
@@ -200,13 +211,26 @@
 {% if compare_data %}
 <div class="card mb-4 border-info">
     <div class="card-header bg-info bg-opacity-10">
-        <strong><i class="bi bi-arrow-left-right me-1"></i>Comparison: {{ period_label }} vs {{ compare_label }}</strong>
+        <strong>
+            <i class="bi bi-arrow-left-right me-1"></i>
+            {% if compare_mode == "class" %}
+            Comparison: {{ class_group.name }} vs {{ compare_label }}
+            {% else %}
+            Comparison: {{ period_label }} vs {{ compare_label }}
+            {% endif %}
+        </strong>
     </div>
     <div class="card-body">
         <div class="comparison-grid">
             {# Current period #}
             <div>
-                <h6 class="text-center mb-3">{{ period_label }}</h6>
+                <h6 class="text-center mb-3">
+                    {% if compare_mode == "class" %}
+                    {{ class_group.name }}
+                    {% else %}
+                    {{ period_label }}
+                    {% endif %}
+                </h6>
                 {% for ad in area_data %}
                 <div class="mb-3">
                     <div class="fw-bold small mb-1">{{ ad.area.name }}</div>
