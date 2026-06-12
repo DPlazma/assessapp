@@ -1,0 +1,156 @@
+{% for ad in area_data %}
+<div class="card mb-3">
+    <div class="card-header bg-light d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2 me-auto"
+             data-bs-toggle="collapse" data-bs-target="#{{ collapse_prefix }}-area-progress-{{ ad.area.pk }}"
+             role="button" style="cursor: pointer; flex: 1;">
+            <i class="bi bi-chevron-down collapse-icon"></i>
+            <strong>{{ ad.area.name }}</strong>
+            <span class="text-muted small">{{ ad.area.subject.name }}</span>
+        </div>
+        <span class="d-flex gap-1 align-items-center">
+            <span class="badge bg-secondary" title="Not Yet Assessed">N {{ ad.totals.NYA }}</span>
+            <span class="badge bg-danger" title="Emerging">E {{ ad.totals.EME }}</span>
+            <span class="badge bg-warning text-dark" title="Developing">D {{ ad.totals.DEV }}</span>
+            <span class="badge bg-success" title="Secure">S {{ ad.totals.SEC }}</span>
+        </span>
+    </div>
+
+    <div class="collapse show" id="{{ collapse_prefix }}-area-progress-{{ ad.area.pk }}">
+    <div class="px-3 pt-2">
+        <div class="d-flex rounded overflow-hidden" style="height: 18px;">
+            {% if ad.pcts.NYA %}
+            <div class="bg-secondary d-flex align-items-center justify-content-center text-white small"
+                 style="width: {{ ad.pcts.NYA }}%;" title="Not Assessed: {{ ad.pcts.NYA }}%">
+                {% if ad.pcts.NYA > 10 %}{{ ad.pcts.NYA }}%{% endif %}
+            </div>
+            {% endif %}
+            {% if ad.pcts.EME %}
+            <div class="bg-danger d-flex align-items-center justify-content-center text-white small"
+                 style="width: {{ ad.pcts.EME }}%;" title="Emerging: {{ ad.pcts.EME }}%">
+                {% if ad.pcts.EME > 10 %}{{ ad.pcts.EME }}%{% endif %}
+            </div>
+            {% endif %}
+            {% if ad.pcts.DEV %}
+            <div class="bg-warning d-flex align-items-center justify-content-center text-dark small"
+                 style="width: {{ ad.pcts.DEV }}%;" title="Developing: {{ ad.pcts.DEV }}%">
+                {% if ad.pcts.DEV > 10 %}{{ ad.pcts.DEV }}%{% endif %}
+            </div>
+            {% endif %}
+            {% if ad.pcts.SEC %}
+            <div class="bg-success d-flex align-items-center justify-content-center text-white small"
+                 style="width: {{ ad.pcts.SEC }}%;" title="Secure: {{ ad.pcts.SEC }}%">
+                {% if ad.pcts.SEC > 10 %}{{ ad.pcts.SEC }}%{% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table progress-table mb-0">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th class="text-center" style="width:50px;">N</th>
+                    <th class="text-center" style="width:50px;">E</th>
+                    <th class="text-center" style="width:50px;">D</th>
+                    <th class="text-center" style="width:50px;">S</th>
+                    <th style="min-width:100px;">Progress</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in ad.student_rows %}
+                <tr>
+                    <td>
+                        <a href="{% url 'assessments:assess_student' row.student.pk ad.area.subject.pk %}"
+                           class="text-decoration-none">
+                            {{ row.student.full_name }}
+                        </a>
+                        {% if row.extra_levels %}
+                        <button class="btn btn-sm btn-outline-secondary ms-2 py-0 px-1"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#{{ collapse_prefix }}-{{ row.collapse_id }}"
+                                aria-expanded="false"
+                                aria-controls="{{ collapse_prefix }}-{{ row.collapse_id }}"
+                                title="Show other levels">
+                            <i class="bi bi-chevron-down"></i>
+                        </button>
+                        {% endif %}
+                        {% if row.level_label %}
+                        <span class="badge bg-light text-dark border ms-2">{{ row.level_label }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-secondary">{{ row.counts.NYA }}</span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-danger">{{ row.counts.EME }}</span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-warning text-dark">{{ row.counts.DEV }}</span>
+                    </td>
+                    <td class="text-center">
+                        <span class="badge bg-success">{{ row.counts.SEC }}</span>
+                    </td>
+                    <td>
+                        <div class="d-flex mini-bar">
+                            {% if row.pct_nya %}
+                            <div class="bg-secondary" style="width:{{ row.pct_nya }}%"></div>
+                            {% endif %}
+                            {% if row.pct_emerging %}
+                            <div class="bg-danger" style="width:{{ row.pct_emerging }}%"></div>
+                            {% endif %}
+                            {% if row.pct_developing %}
+                            <div class="bg-warning" style="width:{{ row.pct_developing }}%"></div>
+                            {% endif %}
+                            {% if row.pct_secure %}
+                            <div class="bg-success" style="width:{{ row.pct_secure }}%"></div>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% if row.extra_levels %}
+                <tr class="collapse" id="{{ collapse_prefix }}-{{ row.collapse_id }}">
+                    <td colspan="6" class="bg-light-subtle">
+                        <div class="small text-muted mb-2">Other levels in this topic</div>
+                        {% for level_row in row.extra_levels %}
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-light text-dark border" style="min-width:120px;">
+                                {{ level_row.level_label|default:"Other" }}
+                            </span>
+                            <span class="badge bg-secondary">N {{ level_row.counts.NYA }}</span>
+                            <span class="badge bg-danger">E {{ level_row.counts.EME }}</span>
+                            <span class="badge bg-warning text-dark">D {{ level_row.counts.DEV }}</span>
+                            <span class="badge bg-success">S {{ level_row.counts.SEC }}</span>
+                            <div class="d-flex mini-bar flex-grow-1" style="max-width:260px;">
+                                {% if level_row.pct_nya %}
+                                <div class="bg-secondary" style="width:{{ level_row.pct_nya }}%"></div>
+                                {% endif %}
+                                {% if level_row.pct_emerging %}
+                                <div class="bg-danger" style="width:{{ level_row.pct_emerging }}%"></div>
+                                {% endif %}
+                                {% if level_row.pct_developing %}
+                                <div class="bg-warning" style="width:{{ level_row.pct_developing }}%"></div>
+                                {% endif %}
+                                {% if level_row.pct_secure %}
+                                <div class="bg-success" style="width:{{ level_row.pct_secure }}%"></div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    </div>
+</div>
+{% empty %}
+<div class="text-center py-5 text-muted">
+    <i class="bi bi-bar-chart-line" style="font-size: 2rem;"></i>
+    <p class="mt-2">{{ empty_message|default:"No assessment areas found for this class." }}</p>
+</div>
+{% endfor %}
