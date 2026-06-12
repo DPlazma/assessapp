@@ -50,127 +50,93 @@ Renders inside a collapsible card that submits via GET.
                     </div>
                 </div>
 
-                {# ── Student / curriculum filters ── #}
+                {# ── Student / curriculum filters (compact multi-select lists) ── #}
                 <div class="row g-3">
 
-                    {# Pathway — first: most important grouping #}
-                    <div class="col-md-4 col-lg-2">
+                    <div class="col-md-6 col-lg-3">
                         <label class="form-label fw-bold">Pathway</label>
-                        {% for code, label in filter_options.pathways %}
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" 
-                                   name="pathway" value="{{ code }}" id="pw_{{ code }}"
-                                   {% if code in active_filters.pathway %}checked{% endif %}>
-                            <label class="form-check-label" for="pw_{{ code }}">{{ label }}</label>
-                        </div>
-                        {% endfor %}
+                        <select name="pathway" class="form-select form-select-sm" multiple size="4">
+                            {% for code, label in filter_options.pathways %}
+                            <option value="{{ code }}" {% if code in active_filters.pathway %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
 
-                    {# Phase #}
-                    <div class="col-md-4 col-lg-2">
+                    <div class="col-md-6 col-lg-3">
                         <label class="form-label fw-bold">Phase</label>
-                        {% for num, label in filter_options.phases %}
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox"
-                                   name="phase" value="{{ num }}" id="ph_{{ num }}"
-                                   {% if num|stringformat:"d" in active_filters.phase %}checked{% endif %}>
-                            <label class="form-check-label" for="ph_{{ num }}">{{ label }}</label>
-                        </div>
-                        {% endfor %}
+                        <select name="phase" class="form-select form-select-sm" multiple size="4">
+                            {% for num, label in filter_options.phases %}
+                            <option value="{{ num }}" {% if num|stringformat:"d" in active_filters.phase %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
 
-                    {# Class group #}
-                    <div class="col-md-4 col-lg-2">
+                    <div class="col-md-6 col-lg-3">
                         <label class="form-label fw-bold">Class</label>
-                        {% for cg in filter_options.class_groups %}
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox"
-                                   name="class_group" value="{{ cg.pk }}" id="cg_{{ cg.pk }}"
-                                   {% if cg.pk|stringformat:"d" in active_filters.class_group %}checked{% endif %}>
-                            <label class="form-check-label" for="cg_{{ cg.pk }}">{{ cg.name }}</label>
-                        </div>
-                        {% endfor %}
+                        <select name="class_group" class="form-select form-select-sm" multiple size="6">
+                            {% for cg in filter_options.class_groups %}
+                            <option value="{{ cg.pk }}" {% if cg.pk|stringformat:"d" in active_filters.class_group %}selected{% endif %}>{{ cg.name }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
 
-                    {# Year group #}
-                    <div class="col-md-4 col-lg-2">
+                    <div class="col-md-6 col-lg-3">
                         <label class="form-label fw-bold">Year Group</label>
-                        {% for yg in filter_options.year_groups %}
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox"
-                                   name="year_group" value="{{ yg }}" id="yg_{{ yg }}"
-                                   {% if yg|stringformat:"d" in active_filters.year_group %}checked{% endif %}>
-                            <label class="form-check-label" for="yg_{{ yg }}">Year {{ yg }}</label>
-                        </div>
-                        {% endfor %}
+                        <select name="year_group" class="form-select form-select-sm" multiple size="6">
+                            {% for yg in filter_options.year_groups %}
+                            <option value="{{ yg }}" {% if yg|stringformat:"d" in active_filters.year_group %}selected{% endif %}>Year {{ yg }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
 
-                    {# Subject #}
-                    <div class="col-md-4 col-lg-2">
+                    <div class="col-md-6 col-lg-3">
                         <label class="form-label fw-bold">Subject</label>
-                        {% for subj in filter_options.subjects %}
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox"
-                                   name="subject" value="{{ subj.pk }}" id="subj_{{ subj.pk }}"
-                                   {% if subj.pk|stringformat:"d" in active_filters.subject %}checked{% endif %}>
-                            <label class="form-check-label" for="subj_{{ subj.pk }}">{{ subj.name }}</label>
-                        </div>
-                        {% endfor %}
+                        <select name="subject" class="form-select form-select-sm" multiple size="6">
+                            {% for subj in filter_options.subjects %}
+                            <option value="{{ subj.pk }}" {% if subj.pk|stringformat:"d" in active_filters.subject %}selected{% endif %}>{{ subj.name }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
 
-                    {# Framework #}
-                    <div class="col-md-4 col-lg-2">
+                    <div class="col-md-6 col-lg-3">
                         <label class="form-label fw-bold">Framework</label>
-                        {% for fw in filter_options.frameworks %}
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox"
-                                   name="framework" value="{{ fw.pk }}" id="fw_{{ fw.pk }}"
-                                   {% if fw.pk|stringformat:"d" in active_filters.framework %}checked{% endif %}>
-                            <label class="form-check-label" for="fw_{{ fw.pk }}">{{ fw.name }}</label>
-                        </div>
-                        {% endfor %}
+                        <select name="framework" class="form-select form-select-sm" multiple size="6">
+                            {% for fw in filter_options.frameworks %}
+                            <option value="{{ fw.pk }}" {% if fw.pk|stringformat:"d" in active_filters.framework %}selected{% endif %}>{{ fw.name }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
 
-                    {# Topic (area) #}
-                    <div class="col-md-4 col-lg-2">
+                    <div class="col-md-6 col-lg-3">
                         <label class="form-label fw-bold">Topic</label>
-                        {% for topic in filter_options.topics %}
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox"
-                                   name="topic" value="{{ topic }}" id="topic_{{ forloop.counter }}"
-                                   {% if topic in active_filters.topic %}checked{% endif %}>
-                            <label class="form-check-label" for="topic_{{ forloop.counter }}">{{ topic }}</label>
-                        </div>
-                        {% endfor %}
+                        <select name="topic" class="form-select form-select-sm" multiple size="6">
+                            {% for topic in filter_options.topics %}
+                            <option value="{{ topic }}" {% if topic in active_filters.topic %}selected{% endif %}>{{ topic }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
 
-                    {# Level (sub-area) #}
-                    <div class="col-md-4 col-lg-2">
+                    <div class="col-md-6 col-lg-3">
                         <label class="form-label fw-bold">Level</label>
-                        {% for level in filter_options.levels %}
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox"
-                                   name="level" value="{{ level }}" id="level_{{ forloop.counter }}"
-                                   {% if level in active_filters.level %}checked{% endif %}>
-                            <label class="form-check-label" for="level_{{ forloop.counter }}">{{ level }}</label>
-                        </div>
-                        {% endfor %}
+                        <select name="level" class="form-select form-select-sm" multiple size="6">
+                            {% for level in filter_options.levels %}
+                            <option value="{{ level }}" {% if level in active_filters.level %}selected{% endif %}>{{ level }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
 
-                    {# Curriculum year (area year group) #}
-                    <div class="col-md-4 col-lg-2">
+                    <div class="col-md-6 col-lg-3">
                         <label class="form-label fw-bold">Curriculum Year</label>
-                        {% for area_year in filter_options.area_years %}
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox"
-                                   name="area_year" value="{{ area_year }}" id="area_year_{{ area_year }}"
-                                   {% if area_year|stringformat:"d" in active_filters.area_year %}checked{% endif %}>
-                            <label class="form-check-label" for="area_year_{{ area_year }}">Year {{ area_year }}</label>
-                        </div>
-                        {% endfor %}
+                        <select name="area_year" class="form-select form-select-sm" multiple size="6">
+                            {% for area_year in filter_options.area_years %}
+                            <option value="{{ area_year }}" {% if area_year|stringformat:"d" in active_filters.area_year %}selected{% endif %}>Year {{ area_year }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
 
                 </div>
+
+                <div class="form-text mt-2">Tip: hold Ctrl (Windows/Linux) or Cmd (Mac) to select multiple items in each list.</div>
 
                 <div class="mt-3 d-flex gap-2">
                     <button type="submit" class="btn btn-primary btn-sm">
