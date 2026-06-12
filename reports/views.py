@@ -1,12 +1,14 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.db.models import Count, Q
 from django.template.loader import render_to_string
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from students.models import Student, Subject, ClassGroup
 from core.models import AcademicYear, Term
+from assessments.views import _can_assess_student
 from assessments.models import (
     AssessmentFramework,
     AssessmentArea,
@@ -223,6 +225,17 @@ def cohort_report(request):
             counts[status] = counts.get(status, 0) + 1
         student_summaries[student.pk] = counts
 
+    editable_by_student = {}
+    subjects_by_id = {subject.pk: subject for subject in Subject.objects.filter(
+        pk__in=areas.values_list("subject_id", flat=True).distinct()
+    )}
+    for student in students:
+        editable_by_student[student.pk] = {}
+        for subject_id, subject in subjects_by_id.items():
+            editable_by_student[student.pk][subject_id] = _can_assess_student(
+                request.user, student, subject
+            )
+
     # Describe the active time window
     time_label = _time_label(date_from, date_to, time_filters)
 
@@ -232,12 +245,45 @@ def cohort_report(request):
         "areas": areas,
         "grid": grid,
         "student_summaries": student_summaries,
+        "editable_by_student": editable_by_student,
         "filter_options": filter_options,
         "active_filters": active_filters,
         "total_statements": len(statements),
         "time_label": time_label,
     }
     return render(request, "reports/cohort_report.html", context)
+
+
+@login_required
+@require_POST
+def cohort_update_cell(request):
+    """Quick-update one cohort report cell by creating a fresh AssessmentRecord."""
+    student = get_object_or_404(Student, pk=request.POST.get("student_id"))
+    statement = get_object_or_404(AssessmentStatement, pk=request.POST.get("statement_id"))
+    subject = statement.area.subject
+
+    if not _can_assess_student(request.user, student, subject):
+        return JsonResponse({"ok": False, "error": "Not authorised"}, status=403)
+
+    status = (request.POST.get("status") or "NYA").strip().upper()
+    if status not in dict(AssessmentRecord.STATUS_CHOICES):
+        return JsonResponse({"ok": False, "error": "Invalid status"}, status=400)
+
+    AssessmentRecord.objects.create(
+        student=student,
+        statement=statement,
+        status=status,
+        assessed_by=request.user,
+        assessed_date=timezone.now().date(),
+        notes="Updated from cohort report.",
+    )
+
+    return JsonResponse({
+        "ok": True,
+        "status": status,
+        "student_id": student.pk,
+        "statement_id": statement.pk,
+    })
 
 
 @login_required

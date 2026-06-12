@@ -77,19 +77,31 @@
             </td>
             <td>{{ student.class_group|default:"-" }}</td>
             {% with summary=student_summaries|get:student.pk %}
-            <td class="text-center"><span class="badge status-NYA">{{ summary.NYA }}</span></td>
-            <td class="text-center"><span class="badge status-EME">{{ summary.EME }}</span></td>
-            <td class="text-center"><span class="badge status-DEV">{{ summary.DEV }}</span></td>
-            <td class="text-center"><span class="badge status-SEC">{{ summary.SEC }}</span></td>
+            <td class="text-center"><span class="badge status-NYA" id="summary-{{ student.pk }}-NYA">{{ summary.NYA }}</span></td>
+            <td class="text-center"><span class="badge status-EME" id="summary-{{ student.pk }}-EME">{{ summary.EME }}</span></td>
+            <td class="text-center"><span class="badge status-DEV" id="summary-{{ student.pk }}-DEV">{{ summary.DEV }}</span></td>
+            <td class="text-center"><span class="badge status-SEC" id="summary-{{ student.pk }}-SEC">{{ summary.SEC }}</span></td>
             {% endwith %}
             {% with s_grid=grid|get:student.pk %}
             {% for stmt in statements %}
             {% with status=s_grid|get:stmt.pk %}
-            <td class="text-center status-{{ status|default:'NYA' }}" style="min-width:40px;">
-                {{ status|default:"NYA" }}
+            {% with subject_access=editable_by_student|get:student.pk %}
+            {% with can_edit=subject_access|get:stmt.area.subject_id %}
+            <td class="text-center p-0" style="min-width:40px;">
+                <button type="button"
+                        class="btn w-100 h-100 rounded-0 border-0 cohort-status-cell status-{{ status|default:'NYA' }} {% if not can_edit %}disabled opacity-75{% endif %}"
+                        data-student-id="{{ student.pk }}"
+                        data-statement-id="{{ stmt.pk }}"
+                        data-status="{{ status|default:'NYA' }}"
+                        data-can-edit="{% if can_edit %}1{% else %}0{% endif %}"
+                        title="{% if can_edit %}Click to cycle assessment status{% else %}You cannot edit this assessment{% endif %}">
+                    <span class="cohort-status-text">{{ status|default:"NYA" }}</span>
+                </button>
             </td>
             {% endwith %}
             {% endfor %}
+            {% endwith %}
+            {% endwith %}
             {% endwith %}
         </tr>
         {% endfor %}
@@ -110,5 +122,95 @@
     thead .sticky-col {
         z-index: 2;
     }
+    .cohort-status-cell {
+        min-width: 40px;
+        min-height: 36px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        transition: filter 0.15s ease, transform 0.1s ease;
+    }
+    .cohort-status-cell:not(.disabled):hover {
+        filter: brightness(1.06);
+    }
+    .cohort-status-cell.is-saving {
+        opacity: 0.65;
+        pointer-events: none;
+    }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const cycle = ['NYA', 'EME', 'DEV', 'SEC'];
+    const csrfToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('csrftoken='))
+        ?.split('=')[1] || '';
+
+    function applyStatus(button, status) {
+        button.dataset.status = status;
+        button.classList.remove('status-NYA', 'status-EME', 'status-DEV', 'status-SEC');
+        button.classList.add('status-' + status);
+        const text = button.querySelector('.cohort-status-text');
+        if (text) text.textContent = status;
+    }
+
+    function bumpSummary(studentId, oldStatus, newStatus) {
+        if (oldStatus === newStatus) return;
+        const oldEl = document.getElementById(`summary-${studentId}-${oldStatus}`);
+        const newEl = document.getElementById(`summary-${studentId}-${newStatus}`);
+        if (oldEl) oldEl.textContent = Math.max(0, parseInt(oldEl.textContent || '0', 10) - 1);
+        if (newEl) newEl.textContent = parseInt(newEl.textContent || '0', 10) + 1;
+    }
+
+    async function updateCell(button) {
+        if (button.dataset.canEdit !== '1' || button.classList.contains('is-saving')) return;
+
+        const current = button.dataset.status || 'NYA';
+        const next = cycle[(cycle.indexOf(current) + 1) % cycle.length];
+        const studentId = button.dataset.studentId;
+        const statementId = button.dataset.statementId;
+
+        button.classList.add('is-saving');
+        try {
+            const response = await fetch("{% url 'reports:cohort_update_cell' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: new URLSearchParams({
+                    student_id: studentId,
+                    statement_id: statementId,
+                    status: next,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Save failed');
+            }
+
+            const data = await response.json();
+            if (!data.ok) {
+                throw new Error(data.error || 'Save failed');
+            }
+
+            applyStatus(button, data.status);
+            bumpSummary(studentId, current, data.status);
+        } catch (err) {
+            console.error(err);
+            alert('Could not update this assessment cell.');
+        } finally {
+            button.classList.remove('is-saving');
+        }
+    }
+
+    document.addEventListener('click', function(event) {
+        const button = event.target.closest('.cohort-status-cell');
+        if (!button) return;
+        updateCell(button);
+    });
+})();
+</script>
 {% endblock %}
