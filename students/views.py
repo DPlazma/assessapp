@@ -28,6 +28,74 @@ def student_detail(request, pk):
     return redirect(student_landing_url(request.user, student))
 
 
+def _build_statement_grid(records):
+    """Build a per-statement, per-date status grid keyed by statement.
+
+    ``records`` is an iterable of ``AssessmentRecord`` (already filtered and
+    ordered by assessed_date, created_at). Returns ``(all_dates, grid)`` where
+    ``grid`` is a list of ``{"subject": name, "statements": [...]}``. Each row
+    is keyed by the statement, with one cell per date showing the status and
+    whether it improved / regressed relative to the previous assessment.
+    """
+    from collections import OrderedDict
+
+    STATUS_ORDER = {"NYA": 0, "EME": 1, "DEV": 2, "SEC": 3}
+
+    # Keep the latest record per (statement, date).
+    latest_map = {}
+    for r in records:
+        latest_map[(r.statement_id, r.assessed_date)] = r
+    deduped = sorted(
+        latest_map.values(), key=lambda r: (r.assessed_date, r.created_at)
+    )
+
+    all_dates = sorted(set(r.assessed_date for r in deduped))
+
+    stmt_date_map = {}
+    stmt_info = {}
+    for r in deduped:
+        sid = r.statement_id
+        if sid not in stmt_date_map:
+            stmt_date_map[sid] = {}
+            stmt_info[sid] = (
+                r.statement.statement_text, r.statement.area.subject.name
+            )
+        stmt_date_map[sid][r.assessed_date] = (r.status, r.get_status_display())
+
+    grid_by_subject = OrderedDict()
+    for sid, dates in stmt_date_map.items():
+        text, subj_name = stmt_info[sid]
+        if subj_name not in grid_by_subject:
+            grid_by_subject[subj_name] = []
+        cells = []
+        prev_status = None
+        for d in all_dates:
+            if d in dates:
+                status, display = dates[d]
+                if prev_status is None:
+                    change = "new"
+                elif STATUS_ORDER[status] > STATUS_ORDER[prev_status]:
+                    change = "improved"
+                elif STATUS_ORDER[status] < STATUS_ORDER[prev_status]:
+                    change = "regressed"
+                else:
+                    change = "same"
+                cells.append({
+                    "date": d, "status": status, "display": display,
+                    "has_data": True, "change": change,
+                })
+                prev_status = status
+            else:
+                cells.append({"has_data": False, "carried": prev_status})
+        grid_by_subject[subj_name].append({"text": text, "cells": cells})
+
+    grid = [
+        {"subject": name, "statements": stmts}
+        for name, stmts in grid_by_subject.items()
+    ]
+    return all_dates, grid
+
+
 @login_required
 def student_progress(request, pk):
     """Student progress over time — assessments + EHCP, with tracker grids."""
@@ -827,6 +895,27 @@ def student_progress(request, pk):
         ai = AISettings.load()
         ai_available = ai.enabled and ai.provider != "none"
 
+        # ── Statement-keyed change tracker (shown under the topic & level
+        #    table). Keyed by statement, not by timeline, and honours the
+        #    current subject/area focus plus the active date filter. ──
+        tracker_qs = (
+            AssessmentRecord.objects.filter(
+                student=student,
+                statement__area__framework_id__in=assigned_fw_ids,
+            )
+            .select_related("statement__area__subject", "assessed_by")
+            .order_by("assessed_date", "created_at")
+        )
+        if date_from:
+            tracker_qs = tracker_qs.filter(assessed_date__gte=date_from)
+        if date_to:
+            tracker_qs = tracker_qs.filter(assessed_date__lte=date_to)
+        if focus_area:
+            tracker_qs = tracker_qs.filter(statement__area=focus_area)
+        elif focus_subject:
+            tracker_qs = tracker_qs.filter(statement__area__subject=focus_subject)
+        tracker_dates, tracker_grid = _build_statement_grid(tracker_qs)
+
         context.update({
             "subject_summaries": subject_summaries,
             "focus_subject": focus_subject,
@@ -849,6 +938,8 @@ def student_progress(request, pk):
             "ai_available": ai_available,
             "cached_ai_summary": request.session.get(f'ai_summary_{student.pk}', ''),
             "cached_ai_patterns": request.session.get(f'ai_patterns_{student.pk}', ''),
+            "tracker_dates": tracker_dates,
+            "tracker_grid": tracker_grid,
         })
 
     if active_view == "summary" and (

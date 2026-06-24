@@ -123,6 +123,66 @@
     {% include "students/_progress_charts.html" %}
 </div>
 
+{# ── Statement Progress Tracker (keyed by statement, under the charts) ── #}
+{% if tracker_grid %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light d-flex align-items-center flex-wrap">
+        <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Statement Progress Tracker</h6>
+        <span class="text-muted small ms-2">— how each statement has changed
+            {% if focus_area %}in {{ focus_area.name }}{% elif focus_subject %}in {{ focus_subject.name }}{% endif %}</span>
+    </div>
+    <div class="card-body p-0">
+        {% for subj in tracker_grid %}
+        <h6 class="px-3 pt-3 pb-1 mb-0 text-primary">{{ subj.subject }}</h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="small fw-bold" style="min-width: 220px; position: sticky; left: 0; background: #f8f9fa; z-index: 1;">Statement</th>
+                        {% for d in tracker_dates %}
+                        <th class="text-center small fw-bold grid-cell">{{ d|date:"d-m" }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stmt in subj.statements %}
+                    <tr>
+                        <td class="small" style="position: sticky; left: 0; background: #fff; z-index: 1;">{{ stmt.text }}</td>
+                        {% for cell in stmt.cells %}
+                        <td class="text-center grid-cell">
+                            {% if cell.has_data %}
+                                {% if cell.change == "improved" %}
+                                    <i class="bi bi-arrow-up-circle-fill text-success change-arrow me-1"></i>
+                                {% elif cell.change == "regressed" %}
+                                    <i class="bi bi-arrow-down-circle-fill text-danger change-arrow me-1"></i>
+                                {% endif %}
+                                <span class="badge status-{{ cell.status }}">{{ cell.display }}</span>
+                            {% elif cell.carried %}
+                                <span class="badge status-{{ cell.carried }} carried-status">{{ cell.carried }}</span>
+                            {% else %}
+                                <span class="text-muted small">—</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+        <div class="d-flex gap-3 p-3 flex-wrap small text-muted border-top">
+            <span><i class="bi bi-arrow-up-circle-fill text-success me-1"></i>Improved</span>
+            <span><i class="bi bi-arrow-down-circle-fill text-danger me-1"></i>Regressed</span>
+            <span class="badge status-NYA">NYA</span>
+            <span class="badge status-EME">Emerging</span>
+            <span class="badge status-DEV">Developing</span>
+            <span class="badge status-SEC">Secure</span>
+            <span><span class="badge bg-secondary carried-status">Faded</span> = carried forward (no new assessment)</span>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {# ── Termly Snapshots ── #}
 {% if snapshot_by_term %}
 <div class="card mb-4 shadow-sm">
@@ -149,7 +209,7 @@
                     <tr>
                         <td>{{ snap.area.name }} <small class="text-muted">({{ snap.area.subject.name }})</small></td>
                         <td class="text-center">{{ snap.total_statements }}</td>
-                        <td class="text-center"><span class="badge status-NYA">{{ snap.not_assessed_count }}</span></td>
+                        <td class="text-center"><span class="badge status-NYA">{{ snap.display_not_assessed_count }}</span></td>
                         <td class="text-center"><span class="badge status-EME">{{ snap.emerging_count }}</span></td>
                         <td class="text-center"><span class="badge status-DEV">{{ snap.developing_count }}</span></td>
                         <td class="text-center"><span class="badge status-SEC">{{ snap.secure_count }}</span></td>
