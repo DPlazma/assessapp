@@ -40,40 +40,7 @@
 </div>
 
 {% if overall_total > 0 %}
-{# ── Overall doughnut + per-subject bar ── #}
-<div class="row g-2 mb-3">
-    <div class="col-12 col-md-4">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light py-1">
-                <h6 class="mb-0 small"><i class="bi bi-pie-chart me-1"></i>
-                    {% if focus_area %}{{ focus_area.name }}{% elif focus_subject %}{{ focus_subject.name }}{% else %}Overall{% endif %}
-                </h6>
-            </div>
-            <div class="card-body p-2">
-                <div class="chart-box" style="position:relative; height:180px;">
-                    <canvas id="chartsOverallDoughnut"></canvas>
-                </div>
-                <div class="text-center small text-muted mt-1">
-                    {{ overall_total }} statement{{ overall_total|pluralize }}
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-12 col-md-8">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-light py-1">
-                <h6 class="mb-0 small"><i class="bi bi-bar-chart-steps me-1"></i>By subject</h6>
-            </div>
-            <div class="card-body p-2">
-                <div class="chart-box" style="position:relative; height:{% if subject_summaries|length > 10 %}380px{% elif subject_summaries|length > 5 %}280px{% else %}200px{% endif %};">
-                    <canvas id="chartsSubjectBar"></canvas>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-{# ── Per-subject mini doughnuts (clickable to focus) ── #}
+{# ── Per-subject mini doughnuts (clickable to focus) — shown first ── #}
 <div class="card mb-3 shadow-sm">
     <div class="card-header bg-light py-1 d-flex align-items-center justify-content-between">
         <h6 class="mb-0 small"><i class="bi bi-grid-3x3-gap me-1"></i>Per-subject breakdown</h6>
@@ -108,6 +75,39 @@
                 </div>
             </div>
             {% endfor %}
+        </div>
+    </div>
+</div>
+
+{# ── Overall doughnut + per-subject bar ── #}
+<div class="row g-2 mb-3">
+    <div class="col-12 col-md-4">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light py-1">
+                <h6 class="mb-0 small"><i class="bi bi-pie-chart me-1"></i>
+                    {% if focus_area %}{{ focus_area.name }}{% elif focus_subject %}{{ focus_subject.name }}{% else %}Overall{% endif %}
+                </h6>
+            </div>
+            <div class="card-body p-2">
+                <div class="chart-box" style="position:relative; height:180px;">
+                    <canvas id="chartsOverallDoughnut"></canvas>
+                </div>
+                <div class="text-center small text-muted mt-1">
+                    {{ overall_total }} statement{{ overall_total|pluralize }}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-md-8">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-light py-1">
+                <h6 class="mb-0 small"><i class="bi bi-bar-chart-steps me-1"></i>By subject</h6>
+            </div>
+            <div class="card-body p-2">
+                <div class="chart-box" style="position:relative; height:{% if subject_summaries|length > 10 %}380px{% elif subject_summaries|length > 5 %}280px{% else %}200px{% endif %};">
+                    <canvas id="chartsSubjectBar"></canvas>
+                </div>
+            </div>
         </div>
     </div>
 </div>
