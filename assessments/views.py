@@ -1009,7 +1009,21 @@ def import_statements_view(request):
             messages.error(request, "File must be a CSV.")
             return redirect("assessments:import_statements")
 
-        decoded = csv_file.read().decode("utf-8-sig")
+        raw = csv_file.read()
+        decoded = None
+        for encoding in ("utf-8-sig", "cp1252", "latin-1"):
+            try:
+                decoded = raw.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+        if decoded is None:
+            messages.error(
+                request,
+                "Could not read the file. Please re-save it as CSV UTF-8 and try again.",
+            )
+            return redirect("assessments:import_statements")
+
         reader = csv.DictReader(io.StringIO(decoded))
 
         created = 0
