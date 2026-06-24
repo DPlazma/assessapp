@@ -1,6 +1,6 @@
 ﻿from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Max
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -9,6 +9,7 @@ from assessments.models import (
     AssessmentRecord,
     AssessmentArea,
     AssessmentSnapshot,
+    PersonalisedFramework,
 )
 from core.models import AcademicYear, Term
 
@@ -508,6 +509,83 @@ def student_progress(request, pk):
             if focus_area and not focus_subject:
                 focus_subject = focus_area.subject
 
+        # Infer a "working level" floor per area from the highest non-NYA
+        # assessed sub-area order. Lower levels are excluded from summary NYA.
+        area_level_floor = {
+            row["statement__area_id"]: row["max_order"]
+            for row in (
+                AssessmentRecord.objects.filter(
+                    student=student,
+                    statement__area__framework_id__in=assigned_fw_ids,
+                    statement__sub_area__isnull=False,
+                    status__in=("EME", "DEV", "SEC"),
+                )
+                .values("statement__area_id")
+                .annotate(max_order=Max("statement__sub_area__order"))
+            )
+            if row["max_order"] is not None
+        }
+
+        subject_level_floor = {
+            row["statement__area__subject_id"]: row["max_order"]
+            for row in (
+                AssessmentRecord.objects.filter(
+                    student=student,
+                    statement__area__framework_id__in=assigned_fw_ids,
+                    statement__sub_area__isnull=False,
+                    status__in=("EME", "DEV", "SEC"),
+                )
+                .values("statement__area__subject_id")
+                .annotate(max_order=Max("statement__sub_area__order"))
+            )
+            if row["max_order"] is not None
+        }
+
+        statement_meta = {
+            sid_: (area_id, subject_id, sub_order)
+            for sid_, area_id, subject_id, sub_order in AssessmentStatement.objects.filter(
+                area__framework_id__in=assigned_fw_ids,
+            ).values_list("pk", "area_id", "area__subject_id", "sub_area__order")
+        }
+
+        # If this student has framework personalisation, only count selected
+        # statements so unrelated levels do not inflate NYA totals.
+        personalised_stmt_ids = None  # None means "no personalisation filter"
+        pf_list = list(
+            PersonalisedFramework.objects.filter(
+                student=student,
+                framework_id__in=assigned_fw_ids,
+            ).prefetch_related("statements")
+        )
+        if pf_list:
+            selected_stmt_ids = set()
+            for pf in pf_list:
+                stmt_ids = set(pf.statements.values_list("pk", flat=True))
+                if stmt_ids:
+                    selected_stmt_ids |= stmt_ids
+            if selected_stmt_ids:
+                personalised_stmt_ids = selected_stmt_ids
+
+        def _visible_statement_ids(statement_ids):
+            ids = list(statement_ids)
+            visible = []
+            for sid_ in ids:
+                if personalised_stmt_ids is not None and sid_ not in personalised_stmt_ids:
+                    continue
+                area_id, subject_id, sub_order = statement_meta.get(
+                    sid_, (None, None, None)
+                )
+                level_floor = area_level_floor.get(area_id)
+                if level_floor is None:
+                    level_floor = subject_level_floor.get(subject_id)
+                if level_floor is not None:
+                    # Once we can infer a current working level, only include
+                    # that level's statements in summary counts.
+                    if sub_order is None or sub_order != level_floor:
+                        continue
+                visible.append(sid_)
+            return visible
+
         def _latest_status_map(statement_ids):
             latest = {}
             seen = set()
@@ -526,11 +604,20 @@ def student_progress(request, pk):
 
         def _counts_for(statement_ids):
             counts = {"SEC": 0, "DEV": 0, "EME": 0, "NYA": 0}
-            ids = list(statement_ids)
+            ids = _visible_statement_ids(statement_ids)
+            if not ids:
+                return counts, 0
             latest = _latest_status_map(ids)
             for sid_ in ids:
                 counts[latest.get(sid_, "NYA")] += 1
             return counts, len(ids)
+
+        def _entry_level_sort_key(obj):
+            name = (getattr(obj, "name", "") or "").strip()
+            order = getattr(obj, "order", 0)
+            # Keep default order/name sorting, but always place "Entry Level"
+            # (and variants like "Maths Entry Level") at the end.
+            return ("entry level" in name.lower(), order if order is not None else 0, name.lower())
 
         # ── Per-subject RAG breakdown (always all assigned subjects, for grid + bar) ──
         subject_summaries = []
@@ -552,12 +639,16 @@ def student_progress(request, pk):
         # ── Per-area breakdown for focus subject (only from assigned frameworks) ──
         area_breakdown = []
         if focus_subject:
-            for area in AssessmentArea.objects.filter(
+            areas = list(AssessmentArea.objects.filter(
                 subject=focus_subject,
                 framework_id__in=assigned_fw_ids,
-            ).order_by("order", "name"):
+            ).order_by("order", "name"))
+            areas.sort(key=_entry_level_sort_key)
+            for area in areas:
                 stmt_ids = area.statements.values_list("pk", flat=True)
                 counts, total = _counts_for(stmt_ids)
+                if total == 0:
+                    continue
                 area_breakdown.append({
                     "area": area,
                     "total": total,
@@ -571,6 +662,7 @@ def student_progress(request, pk):
         level_breakdown = []
         if focus_area:
             sub_areas = list(SubArea.objects.filter(area=focus_area).order_by("order", "name"))
+            sub_areas.sort(key=_entry_level_sort_key)
             groups = [(sa.name, sa.statements.values_list("pk", flat=True)) for sa in sub_areas]
             unsorted_ids = focus_area.statements.filter(
                 sub_area__isnull=True
@@ -579,6 +671,8 @@ def student_progress(request, pk):
                 groups.append(("(no level)", unsorted_ids))
             for label, stmt_ids in groups:
                 counts, total = _counts_for(stmt_ids)
+                if total == 0:
+                    continue
                 level_breakdown.append({
                     "name": label,
                     "total": total,
@@ -593,11 +687,14 @@ def student_progress(request, pk):
         # Hidden entirely when the focused subject has no levels at all.
         topic_level_breakdown = []
         if focus_subject and not focus_area:
-            for area in AssessmentArea.objects.filter(
+            areas = list(AssessmentArea.objects.filter(
                 subject=focus_subject,
                 framework_id__in=assigned_fw_ids,
-            ).order_by("order", "name"):
+            ).order_by("order", "name"))
+            areas.sort(key=_entry_level_sort_key)
+            for area in areas:
                 sub_areas = list(SubArea.objects.filter(area=area).order_by("order", "name"))
+                sub_areas.sort(key=_entry_level_sort_key)
                 if not sub_areas:
                     continue
                 for sa in sub_areas:
@@ -709,8 +806,17 @@ def student_progress(request, pk):
             .select_related("area__subject", "term__academic_year")
             .order_by("-term__academic_year__start_date", "-term__start_date", "area__subject__name")
         )
+
+        level_area_ids = set(
+            SubArea.objects.filter(area_id__in=snapshots.values_list("area_id", flat=True))
+            .values_list("area_id", flat=True)
+            .distinct()
+        )
         snapshot_by_term = {}
         for snap in snapshots:
+            snap.display_not_assessed_count = (
+                0 if snap.area_id in level_area_ids else snap.not_assessed_count
+            )
             term_label = str(snap.term)
             if term_label not in snapshot_by_term:
                 snapshot_by_term[term_label] = []
