@@ -1458,15 +1458,23 @@ def _cp_date_range(request):
     return None, None, "All time"
 
 
-def _cp_build_data(request, class_group, date_from=None, date_to=None):
+def _cp_build_data(request, class_group, date_from=None, date_to=None,
+                   students_override=None, fw_ids_override=None):
     """Core data builder for class progress — used by the page and exports.
 
     Returns dict with keys: students, area_data, subjects, selected_subject,
     selected_area, chart_data, pathway_choices, phase_choices.
+
+    ``students_override`` (a queryset of active students) and
+    ``fw_ids_override`` (a set of framework ids) let custom student groups
+    reuse this builder without a backing ClassGroup.
     """
     from django.db.models import OuterRef, Subquery
 
-    students_qs = class_group.students.filter(is_active=True)
+    if students_override is not None:
+        students_qs = students_override
+    else:
+        students_qs = class_group.students.filter(is_active=True)
 
     # Pathway filter
     pathways = request.GET.getlist("pathway")
@@ -1481,12 +1489,15 @@ def _cp_build_data(request, class_group, date_from=None, date_to=None):
     students = list(students_qs.order_by("last_name", "first_name"))
     student_ids = [s.pk for s in students]
 
-    # Frameworks assigned to this class
-    assigned_fw_ids = set(
-        FrameworkAssignment.objects.filter(
-            class_group=class_group, framework__is_active=True
-        ).values_list("framework_id", flat=True)
-    )
+    # Frameworks assigned to this class (or supplied for a custom group)
+    if fw_ids_override is not None:
+        assigned_fw_ids = set(fw_ids_override)
+    else:
+        assigned_fw_ids = set(
+            FrameworkAssignment.objects.filter(
+                class_group=class_group, framework__is_active=True
+            ).values_list("framework_id", flat=True)
+        )
 
     if assigned_fw_ids:
         areas = AssessmentArea.objects.filter(
@@ -1776,20 +1787,26 @@ def _cp_build_data(request, class_group, date_from=None, date_to=None):
     }
 
 
-def _cp_chart_context(request, class_group, data):
+def _cp_chart_context(request, class_group, data, fw_ids_override=None):
     """Build the chart-partial context (subject/area/level breakdowns + trend) for a class.
 
     Mirrors students.views.student_progress so the partial templates/students/_progress_charts.html
     can render for an entire class with one line per student on the trend chart.
+
+    ``fw_ids_override`` lets custom student groups supply their own framework
+    ids instead of deriving them from a ClassGroup.
     """
     students = data["students"]
     student_ids = [s.pk for s in students]
 
-    assigned_fw_ids = set(
-        FrameworkAssignment.objects.filter(
-            class_group=class_group, framework__is_active=True
-        ).values_list("framework_id", flat=True)
-    )
+    if fw_ids_override is not None:
+        assigned_fw_ids = set(fw_ids_override)
+    else:
+        assigned_fw_ids = set(
+            FrameworkAssignment.objects.filter(
+                class_group=class_group, framework__is_active=True
+            ).values_list("framework_id", flat=True)
+        )
 
     # Subjects available for this class
     if assigned_fw_ids:

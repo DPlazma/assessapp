@@ -1276,3 +1276,207 @@ def learning_journey_pdf(request, pk):
     safe_name = student.full_name.replace(" ", "_")
     response["Content-Disposition"] = f'attachment; filename="learning_journey_{safe_name}.pdf"'
     return response
+
+
+# ══════════════════════════════════════════════════════════════════════
+#  CUSTOM STUDENT GROUPS
+#  Teacher-defined cohorts that get a class-style progress view.
+# ══════════════════════════════════════════════════════════════════════
+
+def _group_framework_ids(group):
+    """Union of active framework ids assigned to any member of ``group``.
+
+    A member can inherit frameworks via a direct student assignment or via
+    their class group, mirroring how the rest of the app resolves frameworks.
+    """
+    from assessments.models import FrameworkAssignment
+
+    members = group.students.filter(is_active=True)
+    student_ids = list(members.values_list("pk", flat=True))
+    class_ids = list(
+        members.exclude(class_group__isnull=True)
+        .values_list("class_group_id", flat=True)
+    )
+    return set(
+        FrameworkAssignment.objects.filter(framework__is_active=True)
+        .filter(Q(student_id__in=student_ids) | Q(class_group_id__in=class_ids))
+        .values_list("framework_id", flat=True)
+    )
+
+
+@login_required
+def group_list(request):
+    """List the current user's custom groups plus any shared groups."""
+    from students.models import StudentGroup
+
+    my_groups = (
+        StudentGroup.objects.filter(owner=request.user)
+        .prefetch_related("students")
+    )
+    shared_groups = (
+        StudentGroup.objects.filter(is_shared=True)
+        .exclude(owner=request.user)
+        .select_related("owner")
+        .prefetch_related("students")
+    )
+    context = {
+        "my_groups": my_groups,
+        "shared_groups": shared_groups,
+    }
+    return render(request, "students/group_list.html", context)
+
+
+@login_required
+def group_create(request):
+    """Create a custom group.
+
+    GET  → a searchable student picker (the "students list" with checkboxes).
+    POST → save the new group with the selected students.
+    """
+    from django.contrib import messages
+    from students.models import StudentGroup, ClassGroup
+
+    if request.method == "POST":
+        name = (request.POST.get("name") or "").strip()
+        description = (request.POST.get("description") or "").strip()
+        is_shared = bool(request.POST.get("is_shared"))
+        student_ids = request.POST.getlist("students")
+
+        if not name:
+            messages.error(request, "Please give the group a name.")
+        elif not student_ids:
+            messages.error(request, "Select at least one student for the group.")
+        else:
+            group = StudentGroup.objects.create(
+                name=name,
+                description=description,
+                owner=request.user,
+                is_shared=is_shared,
+            )
+            group.students.set(
+                Student.objects.filter(pk__in=student_ids, is_active=True)
+            )
+            messages.success(request, f"Group “{group.name}” created.")
+            return redirect("students:group_progress", pk=group.pk)
+
+    students = (
+        Student.objects.filter(is_active=True)
+        .select_related("class_group")
+        .order_by("last_name", "first_name")
+    )
+    context = {
+        "students": students,
+        "class_groups": ClassGroup.objects.all(),
+        "pathway_choices": Student.PATHWAY_CHOICES,
+        "preselected_ids": [
+            int(i) for i in request.GET.getlist("students") if i.isdigit()
+        ],
+    }
+    return render(request, "students/group_form.html", context)
+
+
+@login_required
+def group_edit(request, pk):
+    """Edit a group's name, sharing and membership."""
+    from django.contrib import messages
+    from students.models import StudentGroup, ClassGroup
+
+    group = get_object_or_404(StudentGroup, pk=pk)
+    if not group.editable_by(request.user):
+        return HttpResponse("Forbidden", status=403)
+
+    if request.method == "POST":
+        name = (request.POST.get("name") or "").strip()
+        description = (request.POST.get("description") or "").strip()
+        is_shared = bool(request.POST.get("is_shared"))
+        student_ids = request.POST.getlist("students")
+
+        if not name:
+            messages.error(request, "Please give the group a name.")
+        elif not student_ids:
+            messages.error(request, "Select at least one student for the group.")
+        else:
+            group.name = name
+            group.description = description
+            group.is_shared = is_shared
+            group.save()
+            group.students.set(
+                Student.objects.filter(pk__in=student_ids, is_active=True)
+            )
+            messages.success(request, f"Group “{group.name}” updated.")
+            return redirect("students:group_progress", pk=group.pk)
+
+    students = (
+        Student.objects.filter(is_active=True)
+        .select_related("class_group")
+        .order_by("last_name", "first_name")
+    )
+    context = {
+        "group": group,
+        "students": students,
+        "class_groups": ClassGroup.objects.all(),
+        "pathway_choices": Student.PATHWAY_CHOICES,
+        "preselected_ids": list(group.students.values_list("pk", flat=True)),
+        "is_edit": True,
+    }
+    return render(request, "students/group_form.html", context)
+
+
+@login_required
+def group_delete(request, pk):
+    """Delete a group (owner or superuser only)."""
+    from django.contrib import messages
+    from students.models import StudentGroup
+
+    group = get_object_or_404(StudentGroup, pk=pk)
+    if not group.editable_by(request.user):
+        return HttpResponse("Forbidden", status=403)
+    if request.method == "POST":
+        name = group.name
+        group.delete()
+        messages.success(request, f"Group “{name}” deleted.")
+        return redirect("students:group_list")
+    return render(request, "students/group_confirm_delete.html", {"group": group})
+
+
+@login_required
+def group_progress(request, pk):
+    """Class-style progress view for a custom student group."""
+    from students.models import StudentGroup
+    from assessments.views import (
+        _cp_date_range, _cp_build_data, _cp_chart_context,
+    )
+
+    group = get_object_or_404(StudentGroup, pk=pk)
+    if not group.visible_to(request.user):
+        return HttpResponse("Forbidden", status=403)
+
+    fw_ids = _group_framework_ids(group)
+    students_qs = group.students.filter(is_active=True)
+
+    date_from, date_to, period_label = _cp_date_range(request)
+    data = _cp_build_data(
+        request, None, date_from, date_to,
+        students_override=students_qs, fw_ids_override=fw_ids,
+    )
+    chart_ctx = _cp_chart_context(request, None, data, fw_ids_override=fw_ids)
+
+    context = {
+        "group": group,
+        "can_edit": group.editable_by(request.user),
+        "member_count": students_qs.count(),
+        "view_mode": request.GET.get("view", "both"),
+        "period_label": period_label,
+        "date_from": request.GET.get("date_from", ""),
+        "date_to": request.GET.get("date_to", ""),
+        "academic_years": AcademicYear.objects.all(),
+        "terms": Term.objects.select_related("academic_year").all(),
+        "selected_academic_year": request.GET.get("academic_year", ""),
+        "selected_term": request.GET.get("term", ""),
+        **data,
+        **chart_ctx,
+    }
+
+    if request.GET.get("partial") == "1" or request.headers.get("HX-Request"):
+        return render(request, "students/_progress_charts.html", context)
+    return render(request, "students/group_progress.html", context)

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block breadcrumb %}<nav aria-label="breadcrumb" class="container-fluid pt-2"><ol class="breadcrumb mb-0 small"><li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}"><i class="bi bi-house-door"></i></a></li><li class="breadcrumb-item"><a href="{% url 'students:group_list' %}">Groups</a></li><li class="breadcrumb-item active">{% if is_edit %}Edit{% else %}New{% endif %}</li></ol></nav>{% endblock %}
+{% block title %}{% if is_edit %}Edit group{% else %}New group{% endif %} — AssessApp{% endblock %}
+
+{% block content %}
+<h5 class="mb-3"><i class="bi bi-people me-2"></i>{% if is_edit %}Edit group{% else %}New custom group{% endif %}</h5>
+
+<form method="post">
+    {% csrf_token %}
+    <div class="card mb-3 shadow-sm">
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label class="form-label fw-bold small">Group name</label>
+                    <input type="text" name="name" class="form-control" required
+                           value="{% if group %}{{ group.name }}{% endif %}" placeholder="e.g. Phonics intervention">
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label fw-bold small">Description (optional)</label>
+                    <input type="text" name="description" class="form-control"
+                           value="{% if group %}{{ group.description }}{% endif %}" placeholder="Short note about this group">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="isShared" name="is_shared"
+                               {% if group and group.is_shared %}checked{% endif %}>
+                        <label class="form-check-label small" for="isShared">Share with all staff</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3 shadow-sm">
+        <div class="card-header bg-light d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <h6 class="mb-0">Select students <span class="badge bg-primary ms-1" id="selCount">0</span></h6>
+            <div class="d-flex gap-2 align-items-center flex-wrap">
+                <input type="search" id="studentSearch" class="form-control form-control-sm" style="max-width:220px;" placeholder="Search name…">
+                <select id="classFilter" class="form-select form-select-sm" style="max-width:200px;">
+                    <option value="">All classes</option>
+                    {% for cg in class_groups %}<option value="{{ cg.pk }}">{{ cg.name }}</option>{% endfor %}
+                </select>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="selectAllVisible">Select visible</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="clearAll">Clear</button>
+            </div>
+        </div>
+        <div class="card-body p-0" style="max-height:520px; overflow-y:auto;">
+            <table class="table table-sm table-hover mb-0 align-middle">
+                <tbody>
+                    {% for s in students %}
+                    <tr class="student-row" data-name="{{ s.full_name|lower }}" data-class="{{ s.class_group_id|default:'' }}">
+                        <td style="width:42px;">
+                            <input class="form-check-input student-cb" type="checkbox" name="students" value="{{ s.pk }}"
+                                   {% if s.pk in preselected_ids %}checked{% endif %}>
+                        </td>
+                        <td>{{ s.full_name }}</td>
+                        <td class="text-muted small">{{ s.class_group.name|default:"—" }}</td>
+                        <td class="text-muted small">{{ s.get_pathway_display }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>{% if is_edit %}Save changes{% else %}Create group{% endif %}</button>
+        <a href="{% url 'students:group_list' %}" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+
+<script>
+(function() {
+    const search = document.getElementById('studentSearch');
+    const classFilter = document.getElementById('classFilter');
+    const rows = Array.from(document.querySelectorAll('.student-row'));
+    const cbs = Array.from(document.querySelectorAll('.student-cb'));
+    const selCount = document.getElementById('selCount');
+
+    const updateCount = () => {
+        selCount.textContent = cbs.filter(c => c.checked).length;
+    };
+    const applyFilter = () => {
+        const q = (search.value || '').trim().toLowerCase();
+        const cls = classFilter.value;
+        rows.forEach(r => {
+            const matchName = !q || r.dataset.name.includes(q);
+            const matchClass = !cls || r.dataset.class === cls;
+            r.style.display = (matchName && matchClass) ? '' : 'none';
+        });
+    };
+    const visibleCbs = () => rows.filter(r => r.style.display !== 'none')
+        .map(r => r.querySelector('.student-cb'));
+
+    search.addEventListener('input', applyFilter);
+    classFilter.addEventListener('change', applyFilter);
+    cbs.forEach(c => c.addEventListener('change', updateCount));
+    document.getElementById('selectAllVisible').addEventListener('click', () => {
+        visibleCbs().forEach(c => { c.checked = true; });
+        updateCount();
+    });
+    document.getElementById('clearAll').addEventListener('click', () => {
+        cbs.forEach(c => { c.checked = false; });
+        updateCount();
+    });
+    updateCount();
+})();
+</script>
+{% endblock %}

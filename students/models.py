@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 
 
 PATHWAY_CHOICES = [
@@ -46,6 +47,48 @@ class ClassGroup(models.Model):
             label += f" · Phase {self.phase}"
         return label
 
+class StudentGroup(models.Model):
+    """A teacher-defined custom group of students.
+
+    Unlike a ClassGroup, a StudentGroup can contain any students across the
+    school. It gives teachers a class-style progress view for an arbitrary
+    cohort. Groups are private to their owner unless marked as shared.
+    """
+
+    name = models.CharField(max_length=120)
+    description = models.CharField(max_length=255, blank=True)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="student_groups",
+    )
+    students = models.ManyToManyField(
+        "Student",
+        related_name="custom_groups",
+        blank=True,
+    )
+    is_shared = models.BooleanField(
+        default=False,
+        help_text="If on, all staff can view this group.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    def visible_to(self, user):
+        """Whether ``user`` may view this group."""
+        return self.is_shared or self.owner_id == getattr(user, "pk", None)
+
+    def editable_by(self, user):
+        """Whether ``user`` may edit/delete this group."""
+        return self.owner_id == getattr(user, "pk", None) or getattr(
+            user, "is_superuser", False
+        )
 
 class Student(models.Model):
     """A student at the school."""

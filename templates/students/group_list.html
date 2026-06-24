@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block breadcrumb %}<nav aria-label="breadcrumb" class="container-fluid pt-2"><ol class="breadcrumb mb-0 small"><li class="breadcrumb-item"><a href="{% url 'core:dashboard' %}"><i class="bi bi-house-door"></i></a></li><li class="breadcrumb-item active">Groups</li></ol></nav>{% endblock %}
+{% block title %}My Groups — AssessApp{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <h5 class="mb-0"><i class="bi bi-people me-2"></i>Custom Groups</h5>
+    <a href="{% url 'students:group_create' %}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-lg me-1"></i>New group
+    </a>
+</div>
+
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light py-2"><h6 class="mb-0">My groups</h6></div>
+    <div class="list-group list-group-flush">
+        {% for group in my_groups %}
+        <div class="list-group-item d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+                <a href="{% url 'students:group_progress' group.pk %}" class="fw-bold text-decoration-none">{{ group.name }}</a>
+                {% if group.is_shared %}<span class="badge bg-info text-dark ms-1"><i class="bi bi-share me-1"></i>Shared</span>{% endif %}
+                <span class="badge bg-secondary ms-1">{{ group.students.count }} student{{ group.students.count|pluralize }}</span>
+                {% if group.description %}<div class="text-muted small">{{ group.description }}</div>{% endif %}
+            </div>
+            <div class="btn-group btn-group-sm">
+                <a href="{% url 'students:group_progress' group.pk %}" class="btn btn-outline-primary"><i class="bi bi-bar-chart-line me-1"></i>Progress</a>
+                <a href="{% url 'students:group_edit' group.pk %}" class="btn btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                <a href="{% url 'students:group_delete' group.pk %}" class="btn btn-outline-danger"><i class="bi bi-trash"></i></a>
+            </div>
+        </div>
+        {% empty %}
+        <div class="list-group-item text-muted text-center py-4">
+            <i class="bi bi-people" style="font-size:1.5rem;"></i>
+            <p class="mb-2 mt-2">You haven't created any groups yet.</p>
+            <a href="{% url 'students:group_create' %}" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Create your first group</a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% if shared_groups %}
+<div class="card mb-4 shadow-sm">
+    <div class="card-header bg-light py-2"><h6 class="mb-0">Shared with you</h6></div>
+    <div class="list-group list-group-flush">
+        {% for group in shared_groups %}
+        <div class="list-group-item d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div>
+                <a href="{% url 'students:group_progress' group.pk %}" class="fw-bold text-decoration-none">{{ group.name }}</a>
+                <span class="badge bg-secondary ms-1">{{ group.students.count }} student{{ group.students.count|pluralize }}</span>
+                <span class="text-muted small ms-1">by {{ group.owner.get_full_name|default:group.owner.username }}</span>
+                {% if group.description %}<div class="text-muted small">{{ group.description }}</div>{% endif %}
+            </div>
+            <a href="{% url 'students:group_progress' group.pk %}" class="btn btn-outline-primary btn-sm"><i class="bi bi-bar-chart-line me-1"></i>Progress</a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

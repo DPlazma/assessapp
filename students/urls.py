@@ -4,6 +4,13 @@ from . import views
 app_name = "students"
 
 urlpatterns = [
+    # ── Custom student groups ──
+    path("groups/", views.group_list, name="group_list"),
+    path("groups/new/", views.group_create, name="group_create"),
+    path("groups/<int:pk>/", views.group_progress, name="group_progress"),
+    path("groups/<int:pk>/edit/", views.group_edit, name="group_edit"),
+    path("groups/<int:pk>/delete/", views.group_delete, name="group_delete"),
+
     path("<int:pk>/", views.student_detail, name="detail"),
     path("<int:pk>/progress/", views.student_progress, name="progress"),
     path("<int:pk>/progress/ai-summary/", views.generate_ai_summary, name="ai_summary"),
