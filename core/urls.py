@@ -10,6 +10,7 @@ urlpatterns = [
     path("dashboard/toggle-widget/", views.toggle_widget, name="toggle_widget"),
     path("dashboard/resize-widget/", views.resize_widget, name="resize_widget"),
     path("dashboard/reset-layout/", views.reset_widget_layout, name="reset_widget_layout"),
+    path("insights/class/<int:class_id>/", views.class_insight_generate, name="class_insight"),
     path("setup/", views.setup_hub, name="setup_hub"),
     path("setup/classes/", views.classes_manage, name="classes_manage"),
     path("setup/subjects/", views.subjects_manage, name="subjects_manage"),

@@ -598,6 +598,40 @@ def _fetch_class_progress(request, ctx):
     return {"cp_areas": cp_areas[:8], "cp_class": active_class}
 
 
+def _fetch_ai_insights(request, ctx):
+    """AI assessment insights for each class the user is responsible for."""
+    from core.models import AISettings, ClassInsight
+
+    ai = AISettings.load()
+    ai_enabled = ai.enabled and ai.provider != "none"
+
+    # Classes the user teaches or is currently covering (deduped, ordered)
+    classes = []
+    seen = set()
+    for cg in list(ctx.get("assigned_classes", [])) + list(ctx.get("covered_classes", [])):
+        if cg.pk not in seen:
+            seen.add(cg.pk)
+            classes.append(cg)
+
+    insight_map = {}
+    if classes:
+        insight_map = {
+            ci.class_group_id: ci
+            for ci in ClassInsight.objects.filter(class_group_id__in=seen)
+            .select_related("generated_by")
+        }
+
+    insight_classes = [
+        {"class_group": cg, "insight": insight_map.get(cg.pk)}
+        for cg in classes
+    ]
+
+    return {
+        "ai_enabled": ai_enabled,
+        "insight_classes": insight_classes,
+    }
+
+
 # ── Widget Registry ─────────────────────────────────────────────────
 
 SIZE_ORDER = ["sm", "md", "lg"]
@@ -712,6 +746,20 @@ WIDGET_REGISTRY = [
         "min_size": "md",
         "max_size": "lg",
         "fetch": _fetch_class_progress,
+        "category": "data",
+        "roles": ["teacher", "lead", "slt"],
+    },
+    {
+        "id": "ai_insights",
+        "title": "AI Insights",
+        "icon": "bi-stars",
+        "description": "AI-generated assessment gaps & focus areas for your class.",
+        "template": "core/widgets/ai_insights.html",
+        "default": True,
+        "size": "md",
+        "min_size": "sm",
+        "max_size": "lg",
+        "fetch": _fetch_ai_insights,
         "category": "data",
         "roles": ["teacher", "lead", "slt"],
     },
@@ -837,6 +885,7 @@ _TEACHER_DEFAULTS = {
     "assessment_summary": True,
     "quick_actions": True,
     "class_progress": True,
+    "ai_insights": True,
     "recent_activity": True,
     "ehcp_overview": True,
     "evidence_stats": False,
@@ -862,6 +911,7 @@ _ROLE_DEFAULTS = {
         "assessment_summary": True,
         "quick_actions": True,
         "class_progress": False,
+        "ai_insights": False,
         "recent_activity": False,
         "ehcp_overview": False,
         "evidence_stats": False,

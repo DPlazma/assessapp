@@ -1,0 +1,40 @@
+{% load tz %}
+<div id="ai-insight-body-{{ insight_class.pk }}">
+    {% if ai_error %}
+    <div class="alert alert-warning py-2 px-3 small mb-2">{{ ai_error }}</div>
+    {% endif %}
+
+    {% if insight and insight.content %}
+    <div class="ai-insight-content small">{{ insight.content|safe }}</div>
+    <div class="d-flex align-items-center justify-content-between mt-2">
+        <span class="text-muted" style="font-size: 0.72rem;">
+            <i class="bi bi-clock-history me-1"></i>{{ insight.created_at|date:"j M, H:i" }}
+            {% if insight.generated_by %}· {{ insight.generated_by.get_full_name|default:insight.generated_by.username }}{% endif %}
+        </span>
+        <button class="btn btn-outline-secondary btn-sm py-0 px-2"
+                style="font-size: 0.72rem;"
+                hx-post="{% url 'core:class_insight' insight_class.pk %}"
+                hx-target="#ai-insight-body-{{ insight_class.pk }}"
+                hx-swap="outerHTML"
+                hx-disabled-elt="this"
+                hx-indicator="#ai-insight-spin-{{ insight_class.pk }}">
+            <span id="ai-insight-spin-{{ insight_class.pk }}" class="htmx-indicator spinner-border spinner-border-sm me-1" style="width:0.7rem;height:0.7rem;"></span>
+            <i class="bi bi-arrow-repeat me-1"></i>Refresh
+        </button>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-3">
+        <i class="bi bi-stars" style="font-size: 1.6rem;"></i>
+        <p class="small mb-2 mt-2">Generate an AI summary of assessment gaps and focus areas.</p>
+        <button class="btn btn-primary btn-sm"
+                hx-post="{% url 'core:class_insight' insight_class.pk %}"
+                hx-target="#ai-insight-body-{{ insight_class.pk }}"
+                hx-swap="outerHTML"
+                hx-disabled-elt="this"
+                hx-indicator="#ai-insight-spin-{{ insight_class.pk }}">
+            <span id="ai-insight-spin-{{ insight_class.pk }}" class="htmx-indicator spinner-border spinner-border-sm me-1" style="width:0.8rem;height:0.8rem;"></span>
+            <i class="bi bi-stars me-1"></i>Generate insight
+        </button>
+    </div>
+    {% endif %}
+</div>

@@ -124,6 +124,34 @@ class DashboardPreference(models.Model):
         return f"Dashboard prefs — {self.user}"
 
 
+class ClassInsight(models.Model):
+    """AI-generated assessment insight for a class (one latest row per class)."""
+
+    class_group = models.OneToOneField(
+        "students.ClassGroup",
+        on_delete=models.CASCADE,
+        related_name="ai_insight",
+    )
+    content = models.TextField(
+        blank=True,
+        help_text="Sanitised HTML produced by the AI provider.",
+    )
+    generated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="class_insights",
+    )
+    created_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Insight — {self.class_group}"
+
+
 # ── Arbor Integration ──────────────────────────────────────────────
 
 

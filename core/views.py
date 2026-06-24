@@ -600,6 +600,169 @@ def reset_widget_layout(request):
     return JsonResponse({"ok": True})
 
 
+# ── AI class insights ───────────────────────────────────────────────
+
+STATUS_LABELS = {"SEC": "Secure", "DEV": "Developing", "EME": "Emerging", "NYA": "Not Yet Assessed"}
+
+
+def _gather_class_insight_stats(class_group):
+    """Summarise a class's assessment data as plain text for the AI prompt.
+
+    Returns (text, has_data). ``text`` describes per-area NEDS coverage,
+    students not yet assessed this term, and the biggest gaps.
+    """
+    from django.db.models import Max, Count
+    from assessments.models import AssessmentArea, AssessmentRecord, FrameworkAssignment
+
+    students = list(class_group.students.filter(is_active=True))
+    student_ids = [s.pk for s in students]
+    if not student_ids:
+        return "", False
+
+    term = Term.get_current()
+
+    # Frameworks assigned to this class (fall back to all active)
+    fw_ids = set(
+        FrameworkAssignment.objects.filter(
+            class_group=class_group, framework__is_active=True
+        ).values_list("framework_id", flat=True)
+    )
+    areas_qs = AssessmentArea.objects.filter(
+        framework_id__in=fw_ids
+    ) if fw_ids else AssessmentArea.objects.filter(framework__is_active=True)
+    areas = areas_qs.select_related("subject").prefetch_related("statements")
+
+    # Latest status per student+statement
+    latest_qs = (
+        AssessmentRecord.objects.filter(student_id__in=student_ids)
+        .values("student_id", "statement_id")
+        .annotate(latest_id=Max("id"))
+    )
+    latest_ids = [r["latest_id"] for r in latest_qs]
+    status_lookup = {}
+    if latest_ids:
+        for rec in AssessmentRecord.objects.filter(id__in=latest_ids).values(
+            "student_id", "statement_id", "status"
+        ):
+            status_lookup[(rec["student_id"], rec["statement_id"])] = rec["status"]
+
+    area_rows = []
+    for area in areas:
+        stmt_ids = [s.pk for s in area.statements.all()]
+        if not stmt_ids:
+            continue
+        counts = {"SEC": 0, "DEV": 0, "EME": 0, "NYA": 0}
+        total = len(stmt_ids) * len(student_ids)
+        for sid in student_ids:
+            for stid in stmt_ids:
+                counts[status_lookup.get((sid, stid), "NYA")] += 1
+        t = total or 1
+        area_rows.append({
+            "subject": area.subject.name,
+            "name": area.name,
+            "counts": counts,
+            "total": total,
+            "nya_pct": round(counts["NYA"] / t * 100),
+            "sec_pct": round(counts["SEC"] / t * 100),
+            "eme_pct": round(counts["EME"] / t * 100),
+        })
+
+    if not area_rows:
+        return "", False
+
+    # Students not assessed this term
+    unassessed = []
+    if term:
+        assessed_ids = set(
+            AssessmentRecord.objects.filter(
+                student_id__in=student_ids,
+                assessed_date__gte=term.start_date,
+                assessed_date__lte=term.end_date,
+            ).values_list("student_id", flat=True)
+        )
+        unassessed = [s for s in students if s.pk not in assessed_ids]
+
+    lines = [
+        f"Class: {class_group.name}",
+        f"Active students: {len(students)}",
+        f"Current term: {term}" if term else "Current term: (none configured)",
+        "",
+        "Per-area coverage (latest status per student, % of all student/statement cells):",
+    ]
+    for r in sorted(area_rows, key=lambda x: x["nya_pct"], reverse=True):
+        lines.append(
+            f"- {r['subject']} / {r['name']}: "
+            f"{r['sec_pct']}% Secure, {r['eme_pct']}% Emerging, {r['nya_pct']}% Not Yet Assessed"
+        )
+
+    if unassessed:
+        names = ", ".join(s.full_name for s in unassessed[:12])
+        more = f" (+{len(unassessed) - 12} more)" if len(unassessed) > 12 else ""
+        lines.append("")
+        lines.append(
+            f"Students with no assessments recorded this term ({len(unassessed)}): {names}{more}"
+        )
+
+    return "\n".join(lines), True
+
+
+@login_required
+@require_POST
+def class_insight_generate(request, class_id):
+    """HTMX endpoint: (re)generate an AI assessment insight for a class."""
+    import re
+    from core.ai import ai_chat
+    from .models import ClassInsight
+
+    class_group = get_object_or_404(ClassGroup, pk=class_id)
+    ai = AISettings.load()
+
+    def _render(insight=None, ai_error=None):
+        return render(request, "core/widgets/_ai_insight_body.html", {
+            "insight": insight,
+            "insight_class": class_group,
+            "ai_enabled": ai.enabled and ai.provider != "none",
+            "ai_error": ai_error,
+        })
+
+    if not (ai.enabled and ai.provider != "none"):
+        return _render(ai_error="AI is not configured.")
+
+    data_text, has_data = _gather_class_insight_stats(class_group)
+    if not has_data:
+        return _render(ai_error="Not enough assessment data for this class yet.")
+
+    prompt = (
+        f"{data_text}\n\n"
+        "You are reviewing the assessment coverage for a SEN class. Based ONLY on the "
+        "data above, write a brief insight for the class teacher that:\n"
+        "1. Notes the strongest, best-covered areas.\n"
+        "2. Highlights the clearest assessment gaps (high 'Not Yet Assessed').\n"
+        "3. Suggests 2-3 specific areas or subjects the teacher could focus on next.\n"
+        "4. Flags any students who have not been assessed this term.\n\n"
+        "Keep it short (around 150-200 words). Do not invent data. "
+        "Format with simple HTML only: <p> paragraphs, optional <ul>/<li> lists, "
+        "and <strong> for emphasis. Do not use markdown or headings."
+    )
+    system = (
+        "You are an experienced SEN assessment lead giving concise, practical, "
+        "supportive guidance to a class teacher."
+    )
+
+    reply, err = ai_chat(prompt, system=system, max_tokens=900, timeout=60)
+    if err:
+        return _render(ai_error=err)
+
+    # Allow only a safe subset of tags
+    reply = re.sub(r"<(?!/?(?:p|strong|em|br|ul|ol|li)\b)[^>]+>", "", reply)
+
+    insight, _ = ClassInsight.objects.update_or_create(
+        class_group=class_group,
+        defaults={"content": reply.strip(), "generated_by": request.user},
+    )
+    return _render(insight=insight)
+
+
 # ── Academic Year Setup ──────────────────────────────────────────────
 
 @login_required

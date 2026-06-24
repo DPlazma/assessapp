@@ -1,0 +1,28 @@
+<!-- AI Insights -->
+{% with ec=widget.extra_context %}
+{% if not ec.ai_enabled %}
+    <div class="text-center text-muted py-3">
+        <i class="bi bi-robot" style="font-size: 2rem;"></i>
+        <p class="small mb-0 mt-2">AI is not configured.</p>
+        {% if role_group == "slt" %}
+        <a href="{% url 'core:ai_settings' %}" class="small">Set up AI</a>
+        {% endif %}
+    </div>
+{% elif not ec.insight_classes %}
+    <div class="text-center text-muted py-3">
+        <i class="bi bi-stars" style="font-size: 2rem;"></i>
+        <p class="small mb-0 mt-2">No class assigned — insights appear here for your class.</p>
+    </div>
+{% else %}
+    {% for row in ec.insight_classes %}
+    <div class="ai-insight-class {% if not forloop.first %}mt-3 pt-3 border-top{% endif %}">
+        {% if ec.insight_classes|length > 1 %}
+        <div class="fw-bold small text-muted mb-1">
+            <i class="bi bi-people me-1"></i>{{ row.class_group.name }}
+        </div>
+        {% endif %}
+        {% include "core/widgets/_ai_insight_body.html" with insight=row.insight insight_class=row.class_group ai_enabled=ec.ai_enabled %}
+    </div>
+    {% endfor %}
+{% endif %}
+{% endwith %}
