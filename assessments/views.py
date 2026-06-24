@@ -1026,17 +1026,39 @@ def import_statements_view(request):
 
         reader = csv.DictReader(io.StringIO(decoded))
 
+        # Accept headers regardless of case/spacing, plus a few common aliases.
+        def _norm_key(k):
+            return (k or "").strip().lower().replace(" ", "_").replace("-", "_")
+
+        column_aliases = {
+            "framework": ("framework", "framework_name"),
+            "subject": ("subject", "subject_name"),
+            "area": ("area", "area_name"),
+            "level": ("level", "sub_area", "subarea", "level_name", "strand", "step", "sub_level"),
+            "statement": ("statement", "statement_text", "descriptor", "objective"),
+            "year_group": ("year_group", "year", "yeargroup"),
+            "phase": ("phase",),
+        }
+
+        def _cell(row_norm, field):
+            for alias in column_aliases[field]:
+                value = row_norm.get(alias)
+                if value:
+                    return value.strip()
+            return ""
+
         created = 0
         errors = []
         for i, row in enumerate(reader, start=2):
             try:
-                framework_name = row.get("framework", "").strip()
-                subject_name = row.get("subject", "").strip()
-                area_name = row.get("area", "").strip()
-                level_name = row.get("level", "").strip()
-                statement_text = row.get("statement", "").strip()
-                year_group = row.get("year_group", "").strip()
-                phase = row.get("phase", "").strip()
+                row_norm = {_norm_key(k): (v or "") for k, v in row.items()}
+                framework_name = _cell(row_norm, "framework")
+                subject_name = _cell(row_norm, "subject")
+                area_name = _cell(row_norm, "area")
+                level_name = _cell(row_norm, "level")
+                statement_text = _cell(row_norm, "statement")
+                year_group = _cell(row_norm, "year_group")
+                phase = _cell(row_norm, "phase")
 
                 if not all([framework_name, subject_name, area_name, statement_text]):
                     errors.append(f"Row {i}: Missing required fields.")

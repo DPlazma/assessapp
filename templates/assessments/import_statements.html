@@ -43,6 +43,7 @@
                         <th>framework</th>
                         <th>subject</th>
                         <th>area</th>
+                        <th>level</th>
                         <th>statement</th>
                         <th>year_group</th>
                         <th>phase</th>
@@ -53,6 +54,7 @@
                         <td>National Curriculum</td>
                         <td>English</td>
                         <td>Reading — Year 3</td>
+                        <td>Word Reading</td>
                         <td>I can use a dictionary to check the meaning of words</td>
                         <td>3</td>
                         <td></td>
@@ -61,6 +63,7 @@
                         <td>Small Steps</td>
                         <td>Mathematics</td>
                         <td>Number — Phase 1</td>
+                        <td>Counting</td>
                         <td>I can recognise numerals 1-5</td>
                         <td></td>
                         <td>1</td>
@@ -69,6 +72,8 @@
             </table>
         </div>
         <p class="text-muted small mb-0">
+            Column headers are case-insensitive. <code>level</code> (the sub-area within
+            an area) is optional — leave it blank for areas without levels.
             Duplicates (same area + statement text) are skipped.
             Frameworks, subjects, and areas are auto-created if they don't exist.
         </p>
