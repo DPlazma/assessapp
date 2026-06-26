@@ -66,6 +66,18 @@ def _get_filter_options(params=None):
             .values_list("year_group", flat=True)
             .distinct()
         ),
+        "students": [
+            {
+                "id": row["pk"],
+                "name": f"{row['last_name']}, {row['first_name']}",
+                "year_group": row["year_group"],
+                "pathway": row["pathway"],
+                "class_id": row["class_group_id"],
+            }
+            for row in Student.objects.filter(is_active=True)
+            .order_by("last_name", "first_name")
+            .values("pk", "first_name", "last_name", "year_group", "pathway", "class_group_id")
+        ],
         "subjects": Subject.objects.filter(is_active=True),
         "frameworks": AssessmentFramework.objects.filter(is_active=True),
         "topics": (
@@ -201,6 +213,11 @@ def _apply_student_filters(request, qs, params=None):
         qs = qs.filter(year_group__in=[int(y) for y in year_groups])
         active["year_group"] = year_groups
 
+    student_ids = params.getlist("student")
+    if student_ids:
+        qs = qs.filter(pk__in=[int(s) for s in student_ids])
+        active["student"] = student_ids
+
     return qs, active
 
 
@@ -242,6 +259,7 @@ def _cohort_effective_params(request):
             "phase",
             "class_group",
             "year_group",
+            "student",
             "subject",
             "framework",
             "topic",
