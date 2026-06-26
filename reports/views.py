@@ -38,14 +38,6 @@ def _get_filter_options(params=None):
     selected_area_years = _int_values(params.getlist("area_year")) if hasattr(params, "getlist") else []
     selected_topics = params.getlist("topic") if hasattr(params, "getlist") else []
 
-    topic_areas = AssessmentArea.objects.all()
-    if selected_framework_ids:
-        topic_areas = topic_areas.filter(framework_id__in=selected_framework_ids)
-    if selected_subject_ids:
-        topic_areas = topic_areas.filter(subject_id__in=selected_subject_ids)
-    if selected_area_years:
-        topic_areas = topic_areas.filter(year_group__in=selected_area_years)
-
     level_sub_areas = SubArea.objects.all()
     if selected_topics:
         level_sub_areas = level_sub_areas.filter(area__name__in=selected_topics)
@@ -81,11 +73,17 @@ def _get_filter_options(params=None):
         "subjects": Subject.objects.filter(is_active=True),
         "frameworks": AssessmentFramework.objects.filter(is_active=True),
         "topics": (
-            topic_areas.exclude(name__exact="")
+            AssessmentArea.objects.exclude(name__exact="")
             .values_list("name", flat=True)
             .distinct()
             .order_by("name")
         ),
+        "area_facets": [
+            {"s": row["subject_id"], "f": row["framework_id"], "t": row["name"]}
+            for row in AssessmentArea.objects.exclude(name__exact="")
+            .values("subject_id", "framework_id", "name")
+            .distinct()
+        ],
         "levels": (
             level_sub_areas.exclude(name__exact="")
             .values_list("name", flat=True)

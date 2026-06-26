@@ -110,6 +110,7 @@ Renders inside a collapsible card that submits via GET.
                 </div>
 
                 {# ── Curriculum filters ── #}
+                {{ filter_options.area_facets|json_script:"cohort-area-data" }}
                 <div class="row g-3">
 
                     <div class="col-md-6 col-lg-3">
@@ -122,8 +123,11 @@ Renders inside a collapsible card that submits via GET.
                     </div>
 
                     <div class="col-md-6 col-lg-3">
-                        <label class="form-label fw-bold">Subject</label>
-                        <select name="subject" class="form-select form-select-sm" multiple size="6">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label fw-bold mb-0">Subject</label>
+                            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none cf-clear" data-target="cf-subject">Clear</button>
+                        </div>
+                        <select name="subject" id="cf-subject" class="form-select form-select-sm" multiple size="6">
                             {% for subj in filter_options.subjects %}
                             <option value="{{ subj.pk }}" {% if subj.pk|stringformat:"d" in active_filters.subject %}selected{% endif %}>{{ subj.name }}</option>
                             {% endfor %}
@@ -131,8 +135,11 @@ Renders inside a collapsible card that submits via GET.
                     </div>
 
                     <div class="col-md-6 col-lg-3">
-                        <label class="form-label fw-bold">Framework</label>
-                        <select name="framework" class="form-select form-select-sm" multiple size="6">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label fw-bold mb-0">Framework</label>
+                            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none cf-clear" data-target="cf-framework">Clear</button>
+                        </div>
+                        <select name="framework" id="cf-framework" class="form-select form-select-sm" multiple size="6">
                             {% for fw in filter_options.frameworks %}
                             <option value="{{ fw.pk }}" {% if fw.pk|stringformat:"d" in active_filters.framework %}selected{% endif %}>{{ fw.name }}</option>
                             {% endfor %}
@@ -140,8 +147,11 @@ Renders inside a collapsible card that submits via GET.
                     </div>
 
                     <div class="col-md-6 col-lg-3">
-                        <label class="form-label fw-bold">Topic</label>
-                        <select name="topic" class="form-select form-select-sm" multiple size="6">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label fw-bold mb-0">Topic</label>
+                            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none cf-clear" data-target="cf-topic">Clear</button>
+                        </div>
+                        <select name="topic" id="cf-topic" class="form-select form-select-sm" multiple size="6">
                             {% for topic in filter_options.topics %}
                             <option value="{{ topic }}" {% if topic in active_filters.topic %}selected{% endif %}>{{ topic }}</option>
                             {% endfor %}
@@ -185,24 +195,6 @@ Renders inside a collapsible card that submits via GET.
 
 <script>
 (function () {
-    var listEls = {
-        year_group: document.getElementById("cf-year"),
-        pathway:    document.getElementById("cf-pathway"),
-        class_id:   document.getElementById("cf-class"),
-        id:         document.getElementById("cf-student"),
-    };
-    if (!listEls.year_group || !listEls.pathway || !listEls.class_id || !listEls.id) {
-        return; // panel not on this page
-    }
-
-    var dataEl = document.getElementById("cohort-student-data");
-    var students = [];
-    try {
-        students = JSON.parse(dataEl.textContent) || [];
-    } catch (e) {
-        students = [];
-    }
-
     function selectedValues(sel) {
         var out = [];
         for (var i = 0; i < sel.options.length; i++) {
@@ -225,67 +217,90 @@ Renders inside a collapsible card that submits via GET.
         return changed;
     }
 
-    // Does a student row satisfy the selections in the requested dimensions?
-    function studentMatches(stu, sel, dims) {
-        if (dims.year_group && sel.year_group.length && sel.year_group.indexOf(String(stu.year_group)) === -1) return false;
-        if (dims.pathway    && sel.pathway.length    && sel.pathway.indexOf(stu.pathway) === -1) return false;
-        if (dims.class_id   && sel.class_id.length   && sel.class_id.indexOf(String(stu.class_id)) === -1) return false;
-        if (dims.id         && sel.id.length         && sel.id.indexOf(String(stu.id)) === -1) return false;
-        return true;
-    }
-
-    function recomputeOnce() {
-        var sel = {
-            year_group: selectedValues(listEls.year_group),
-            pathway:    selectedValues(listEls.pathway),
-            class_id:   selectedValues(listEls.class_id),
-            id:         selectedValues(listEls.id),
-        };
-
-        var valid = {
-            year_group: new Set(),
-            pathway:    new Set(),
-            class_id:   new Set(),
-            id:         new Set(),
-        };
-
-        students.forEach(function (stu) {
-            // A list's own dimension is excluded so its current options stay self-consistent.
-            if (studentMatches(stu, sel, { pathway: 1, class_id: 1, id: 1 })) valid.year_group.add(String(stu.year_group));
-            if (studentMatches(stu, sel, { year_group: 1, class_id: 1, id: 1 })) valid.pathway.add(stu.pathway);
-            if (studentMatches(stu, sel, { year_group: 1, pathway: 1, id: 1 })) valid.class_id.add(String(stu.class_id));
-            if (studentMatches(stu, sel, { year_group: 1, pathway: 1, class_id: 1 })) valid.id.add(String(stu.id));
-        });
-
-        var changed = false;
-        changed = applyVisibility(listEls.year_group, valid.year_group) || changed;
-        changed = applyVisibility(listEls.pathway, valid.pathway) || changed;
-        changed = applyVisibility(listEls.class_id, valid.class_id) || changed;
-        changed = applyVisibility(listEls.id, valid.id) || changed;
-        return changed;
-    }
-
-    function recompute() {
-        // Deselecting hidden options can open others up, so iterate until stable.
-        for (var i = 0; i < 6; i++) {
-            if (!recomputeOnce()) break;
+    // Wire up a group of multi-selects that cross-filter one another in real time.
+    // `dims` = [{ sel: <select>, key: 'propName' }, ...] matching keys on each data row.
+    function setupCrossFilter(rows, dims) {
+        function rowMatches(row, selMap, excludeKey) {
+            for (var i = 0; i < dims.length; i++) {
+                var d = dims[i];
+                if (d.key === excludeKey) continue;
+                var picked = selMap[d.key];
+                if (picked.length && picked.indexOf(String(row[d.key])) === -1) return false;
+            }
+            return true;
         }
+
+        function recomputeOnce() {
+            var selMap = {};
+            var validMap = {};
+            dims.forEach(function (d) {
+                selMap[d.key] = selectedValues(d.sel);
+                validMap[d.key] = new Set();
+            });
+            rows.forEach(function (row) {
+                dims.forEach(function (d) {
+                    if (rowMatches(row, selMap, d.key)) validMap[d.key].add(String(row[d.key]));
+                });
+            });
+            var changed = false;
+            dims.forEach(function (d) {
+                changed = applyVisibility(d.sel, validMap[d.key]) || changed;
+            });
+            return changed;
+        }
+
+        function recompute() {
+            // Deselecting hidden options can open others up, so iterate until stable.
+            for (var i = 0; i < 6; i++) {
+                if (!recomputeOnce()) break;
+            }
+        }
+
+        dims.forEach(function (d) { d.sel.addEventListener("change", recompute); });
+        recompute();
     }
 
-    Object.keys(listEls).forEach(function (key) {
-        listEls[key].addEventListener("change", recompute);
-    });
+    function parseJSON(id) {
+        var el = document.getElementById(id);
+        if (!el) return null;
+        try { return JSON.parse(el.textContent) || []; } catch (e) { return []; }
+    }
 
+    // Group 1 — student cohort lists (Year Group / Pathway / Class / Student).
+    var yearEl = document.getElementById("cf-year");
+    var pathwayEl = document.getElementById("cf-pathway");
+    var classEl = document.getElementById("cf-class");
+    var studentEl = document.getElementById("cf-student");
+    if (yearEl && pathwayEl && classEl && studentEl) {
+        setupCrossFilter(parseJSON("cohort-student-data") || [], [
+            { sel: yearEl, key: "year_group" },
+            { sel: pathwayEl, key: "pathway" },
+            { sel: classEl, key: "class_id" },
+            { sel: studentEl, key: "id" },
+        ]);
+    }
+
+    // Group 2 — curriculum lists (Subject / Framework / Topic).
+    var subjectEl = document.getElementById("cf-subject");
+    var frameworkEl = document.getElementById("cf-framework");
+    var topicEl = document.getElementById("cf-topic");
+    if (subjectEl && frameworkEl && topicEl) {
+        setupCrossFilter(parseJSON("cohort-area-data") || [], [
+            { sel: subjectEl, key: "s" },
+            { sel: frameworkEl, key: "f" },
+            { sel: topicEl, key: "t" },
+        ]);
+    }
+
+    // Per-list Clear buttons — deselect everything then re-run that group's filter.
     var clearButtons = document.querySelectorAll(".cf-clear");
     for (var b = 0; b < clearButtons.length; b++) {
         clearButtons[b].addEventListener("click", function () {
             var sel = document.getElementById(this.getAttribute("data-target"));
             if (!sel) return;
             for (var i = 0; i < sel.options.length; i++) { sel.options[i].selected = false; }
-            recompute();
+            sel.dispatchEvent(new Event("change"));
         });
     }
-
-    recompute();
 })();
 </script>
