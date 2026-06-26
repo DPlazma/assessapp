@@ -212,7 +212,7 @@ class ArborClient:
         data = self.graphql("""
             { Staff {
                 id displayName leavingDate isActiveInSchool
-                person { legalFirstName legalLastName }
+                person { legalFirstName legalLastName preferredFirstName preferredLastName }
             } }
         """)
         staff = data.get("Staff", [])
@@ -233,7 +233,7 @@ class ArborClient:
             { RegistrationForm {
                 id displayName
                 tutors { id displayName
-                         person { legalFirstName legalLastName } }
+                         person { legalFirstName legalLastName preferredFirstName preferredLastName } }
             } }
         """)
         links = []
@@ -439,7 +439,7 @@ class ArborClient:
             staff_data = self.graphql("""
                 { Staff {
                     id displayName leavingDate isActiveInSchool
-                    person { legalFirstName legalLastName }
+                    person { legalFirstName legalLastName preferredFirstName preferredLastName }
                 } }
             """)
             arbor_staff = [

@@ -1361,6 +1361,18 @@ def arbor_run_sync(request):
 
 # ── Arbor Import (read from Arbor → AssessApp) ────────────────────
 
+def _arbor_staff_name(person):
+    """Return (first, last) for an Arbor staff person.
+
+    Prefers Arbor's *preferred* name, falling back to the legal name when a
+    preferred name isn't set.
+    """
+    person = person or {}
+    first = (person.get("preferredFirstName") or person.get("legalFirstName") or "").strip()
+    last = (person.get("preferredLastName") or person.get("legalLastName") or "").strip()
+    return first, last
+
+
 @slt_required
 def arbor_import_preview(request):
     """Wizard-style Arbor import: step 1 = pick year, step 2 = preview."""
@@ -1521,8 +1533,7 @@ def arbor_import_preview(request):
     staff_preview = []
     for st in arbor_staff:
         person = st.get("person") or {}
-        first = person.get("legalFirstName", "")
-        last = person.get("legalLastName", "")
+        first, last = _arbor_staff_name(person)
         display = st.get("displayName", "")
         full = f"{first} {last}".strip().lower()
 
@@ -1617,6 +1628,7 @@ def arbor_import_run(request):
         "students_created": 0,
         "students_updated": 0,
         "staff_created": 0,
+        "staff_updated": 0,
         "assignments_created": 0,
         "errors": [],
     }
@@ -1715,11 +1727,19 @@ def arbor_import_run(request):
                 full = f"{u.first_name} {u.last_name}".strip().lower()
                 if full:
                     local_names[full] = u
+            # Also index already-synced staff by their Arbor ID, so switching
+            # to preferred names still finds them (and renames rather than
+            # creating duplicates) when the preferred name differs from legal.
+            local_by_arbor_id = {
+                p.arbor_staff_id: p.user
+                for p in StaffProfile.objects.filter(
+                    arbor_staff_id__isnull=False, user__is_active=True
+                ).select_related("user")
+            }
 
             for st in arbor_staff:
                 person = st.get("person") or {}
-                first = person.get("legalFirstName", "").strip()
-                last = person.get("legalLastName", "").strip()
+                first, last = _arbor_staff_name(person)
                 full = f"{first} {last}".strip().lower()
 
                 if not full:
@@ -1728,9 +1748,21 @@ def arbor_import_run(request):
                 arbor_id = int(st["id"])
                 role = staff_roles.get(arbor_id, "teacher")
 
-                if full in local_names:
-                    staff_name_map[full] = local_names[full]
-                    user = local_names[full]
+                existing_user = local_by_arbor_id.get(arbor_id) or local_names.get(full)
+                if existing_user:
+                    user = existing_user
+                    staff_name_map[full] = user
+                    # Keep the local name in step with Arbor's preferred name.
+                    name_changed = False
+                    if first and user.first_name != first:
+                        user.first_name = first
+                        name_changed = True
+                    if last and user.last_name != last:
+                        user.last_name = last
+                        name_changed = True
+                    if name_changed:
+                        user.save(update_fields=["first_name", "last_name"])
+                        results["staff_updated"] += 1
                     profile, _ = StaffProfile.objects.get_or_create(
                         user=user,
                         defaults={"role": role},
@@ -1815,8 +1847,7 @@ def arbor_import_run(request):
                     continue
 
                 class_name = (reg.get("displayName") or "").strip()
-                first = staff_person.get("legalFirstName", "").strip()
-                last = staff_person.get("legalLastName", "").strip()
+                first, last = _arbor_staff_name(staff_person)
                 staff_full = f"{first} {last}".strip().lower()
 
                 cg = class_map.get(class_name)
@@ -1835,7 +1866,7 @@ def arbor_import_run(request):
 
     total = (results["classes_created"] + results["students_created"] +
              results["students_updated"] + results["staff_created"] +
-             results["assignments_created"])
+             results["staff_updated"] + results["assignments_created"])
     error_count = len(results["errors"])
 
     msg_parts = []
@@ -1847,6 +1878,8 @@ def arbor_import_run(request):
         msg_parts.append(f"{results['students_updated']} students updated")
     if results["staff_created"]:
         msg_parts.append(f"{results['staff_created']} staff created")
+    if results["staff_updated"]:
+        msg_parts.append(f"{results['staff_updated']} staff renamed")
     if results["assignments_created"]:
         msg_parts.append(f"{results['assignments_created']} class assignments created")
     if error_count:
