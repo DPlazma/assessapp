@@ -26,6 +26,28 @@
             <small class="text-muted ms-1">({{ sub_area.statements.count }} statement{{ sub_area.statements.count|pluralize }})</small>
         </div>
         <div class="d-flex gap-1">
+            <div class="btn-group btn-group-sm" role="group" aria-label="Reorder">
+                <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="reorder">
+                    <input type="hidden" name="sub_area_id" value="{{ sub_area.pk }}">
+                    <input type="hidden" name="direction" value="up">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Move up"
+                            {% if forloop.first %}disabled{% endif %}>
+                        <i class="bi bi-arrow-up"></i>
+                    </button>
+                </form>
+                <form method="post" class="d-inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="reorder">
+                    <input type="hidden" name="sub_area_id" value="{{ sub_area.pk }}">
+                    <input type="hidden" name="direction" value="down">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Move down"
+                            {% if forloop.last %}disabled{% endif %}>
+                        <i class="bi bi-arrow-down"></i>
+                    </button>
+                </form>
+            </div>
             <button class="btn btn-sm btn-outline-primary" type="button"
                     onclick="editLevel({{ sub_area.pk }}, this)">
                 <i class="bi bi-pencil"></i>

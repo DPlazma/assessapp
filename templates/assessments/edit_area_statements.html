@@ -40,6 +40,28 @@
                 {{ statement.statement_text }}
             </div>
             <div class="d-flex gap-1">
+                <div class="btn-group btn-group-sm" role="group" aria-label="Reorder">
+                    <form method="post" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="reorder">
+                        <input type="hidden" name="statement_id" value="{{ statement.pk }}">
+                        <input type="hidden" name="direction" value="up">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="Move up"
+                                {% if forloop.first %}disabled{% endif %}>
+                            <i class="bi bi-arrow-up"></i>
+                        </button>
+                    </form>
+                    <form method="post" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="reorder">
+                        <input type="hidden" name="statement_id" value="{{ statement.pk }}">
+                        <input type="hidden" name="direction" value="down">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="Move down"
+                                {% if forloop.last %}disabled{% endif %}>
+                            <i class="bi bi-arrow-down"></i>
+                        </button>
+                    </form>
+                </div>
                 {% if sub_areas.count %}
                 <div class="dropdown">
                     <button class="btn btn-sm btn-outline-info dropdown-toggle" type="button"

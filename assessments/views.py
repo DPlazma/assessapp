@@ -899,6 +899,20 @@ def manage_sub_areas(request, area_id):
                 area.sub_areas.filter(pk=sub_id).update(name=name)
                 messages.success(request, "Level updated.")
 
+        elif action == "reorder":
+            sub_id = request.POST.get("sub_area_id")
+            direction = request.POST.get("direction")
+            sub = area.sub_areas.filter(pk=sub_id).first()
+            if sub and direction in ("up", "down"):
+                siblings = list(area.sub_areas.order_by("order", "pk"))
+                idx = next((i for i, s in enumerate(siblings) if s.pk == sub.pk), None)
+                swap = (idx - 1) if direction == "up" else (idx + 1)
+                if idx is not None and 0 <= swap < len(siblings):
+                    siblings[idx], siblings[swap] = siblings[swap], siblings[idx]
+                    for i, s in enumerate(siblings, start=1):
+                        if s.order != i:
+                            SubArea.objects.filter(pk=s.pk).update(order=i)
+
         return redirect("assessments:manage_sub_areas", area_id=area_id)
 
     sub_areas = area.sub_areas.all()
@@ -961,6 +975,22 @@ def edit_area_statements(request, area_id):
                         stmt.sub_area = None
                         stmt.save(update_fields=["sub_area"])
                         messages.success(request, "Statement moved to ungrouped.")
+
+        elif action == "reorder":
+            stmt_id = request.POST.get("statement_id")
+            direction = request.POST.get("direction")
+            stmt = area.statements.filter(pk=stmt_id).first()
+            if stmt and direction in ("up", "down"):
+                siblings = list(
+                    area.statements.filter(sub_area=stmt.sub_area).order_by("order", "pk")
+                )
+                idx = next((i for i, s in enumerate(siblings) if s.pk == stmt.pk), None)
+                swap = (idx - 1) if direction == "up" else (idx + 1)
+                if idx is not None and 0 <= swap < len(siblings):
+                    siblings[idx], siblings[swap] = siblings[swap], siblings[idx]
+                    for i, s in enumerate(siblings, start=1):
+                        if s.order != i:
+                            AssessmentStatement.objects.filter(pk=s.pk).update(order=i)
 
         return redirect("assessments:edit_area_statements", area_id=area_id)
 

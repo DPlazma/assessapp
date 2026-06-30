@@ -90,9 +90,8 @@
             <th style="min-width:50px;" title="Developing">D</th>
             <th style="min-width:50px;" title="Secure">S</th>
             {% for stmt in statements %}
-            <th class="text-center" style="min-width:40px; writing-mode: vertical-rl; text-orientation: mixed; max-height: 200px;"
-                title="{{ stmt.statement_text }}">
-                {{ stmt.statement_text|truncatewords:5 }}
+            <th class="text-center cohort-stmt-th" title="{{ stmt.statement_text }}">
+                <div class="cohort-stmt-label">{{ stmt.statement_text|truncatewords:20 }}</div>
             </th>
             {% endfor %}
         </tr>
@@ -151,6 +150,22 @@
     .cohort-mark-filter.is-off {
         opacity: 0.45;
         filter: grayscale(0.2);
+    }
+    .cohort-stmt-th {
+        padding: 4px 2px;
+        vertical-align: bottom;
+    }
+    .cohort-stmt-label {
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+        height: 220px;
+        max-width: 3.4em;          /* room for ~2 wrapped columns */
+        white-space: normal;
+        overflow: hidden;
+        line-height: 1.15;
+        margin: 0 auto;
+        text-align: left;          /* start reading from the top */
+        word-break: break-word;
     }
 </style>
 {% endblock %}
